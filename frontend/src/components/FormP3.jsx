@@ -247,33 +247,35 @@ export default function FormP3({ role, lang, t, onSubmit, onBack }) {
         </div>
 
         {/* Nationality */}
-        <div>
-          <label className="block text-sm text-slate-400 mb-1">{f.nationalityLabel}</label>
-          <select 
-            required
-            className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
-            value={formData.nationality}
-            onChange={e => setFormData({...formData, nationality: e.target.value})}
-          >
-            <option value="">{f.selectDefault}</option>
-            <option value="vn">{f.natVn}</option>
-            <option value="tw">{f.natTw}</option>
-            <option value="other">{f.natOther}</option>
-          </select>
-          {formData.nationality === 'other' && (
-            <input 
+        {role === 'student' && (
+          <div>
+            <label className="block text-sm text-slate-400 mb-1">{f.nationalityLabel}</label>
+            <select 
               required
-              type="text" 
-              placeholder={f.natOtherPlaceholder}
-              className="w-full mt-2 bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
-              value={formData.nationalityOther}
-              onChange={e => setFormData({...formData, nationalityOther: e.target.value})}
-            />
-          )}
-        </div>
+              className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
+              value={formData.nationality}
+              onChange={e => setFormData({...formData, nationality: e.target.value})}
+            >
+              <option value="">{f.selectDefault}</option>
+              <option value="vn">{f.natVn}</option>
+              <option value="tw">{f.natTw}</option>
+              <option value="other">{f.natOther}</option>
+            </select>
+            {formData.nationality === 'other' && (
+              <input 
+                required
+                type="text" 
+                placeholder={f.natOtherPlaceholder}
+                className="w-full mt-2 bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
+                value={formData.nationalityOther}
+                onChange={e => setFormData({...formData, nationalityOther: e.target.value})}
+              />
+            )}
+          </div>
+        )}
 
         {/* Birthplace (Only if VN) */}
-        {formData.nationality === 'vn' && (
+        {role === 'student' && formData.nationality === 'vn' && (
           <div>
             <label className="block text-sm text-slate-400 mb-1">{f.birthplaceLabel}</label>
             <select 
@@ -297,7 +299,7 @@ export default function FormP3({ role, lang, t, onSubmit, onBack }) {
           </div>
         )}
 
-        {/* Native Language */}
+        {/* Native Language (For both Student and Teacher) */}
         <div>
           <label className="block text-sm text-slate-400 mb-1">{f.nativeLangLabel}</label>
           <select 
@@ -324,22 +326,24 @@ export default function FormP3({ role, lang, t, onSubmit, onBack }) {
         </div>
 
         {/* Chinese Level */}
-        <div>
-          <label className="block text-sm text-slate-400 mb-1">{f.levelLabel}</label>
-          <select 
-            required
-            className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
-            value={formData.chineseLevel}
-            onChange={e => setFormData({...formData, chineseLevel: e.target.value})}
-          >
-            <option value="">{f.levelSelect}</option>
-            <option value="A0">準備級 / Cấp độ chuẩn bị (TOCFL under A1 / HSK 1-2) [300字以下]</option>
-            <option value="A1">入門級 / Cấp độ A1 (TOCFL Level 1 / HSK 3) [500-600字]</option>
-            <option value="A2">基礎級 / Cấp độ A2 (TOCFL Level 2 / HSK 4) [1000-1200字]</option>
-            <option value="B1B2">中級 / Cấp độ B1-B2 (TOCFL Level 3-4 / HSK 5-6) [2500-5000字]</option>
-            <option value="C1C2">高級 / Cấp độ C1-C2 (TOCFL Level 5-6) [8000字以上]</option>
-          </select>
-        </div>
+        {role === 'student' && (
+          <div>
+            <label className="block text-sm text-slate-400 mb-1">{f.levelLabel}</label>
+            <select 
+              required
+              className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
+              value={formData.chineseLevel}
+              onChange={e => setFormData({...formData, chineseLevel: e.target.value})}
+            >
+              <option value="">{f.levelSelect}</option>
+              <option value="A0">準備級 / Cấp độ chuẩn bị (TOCFL under A1 / HSK 1-2) [300字以下]</option>
+              <option value="A1">入門級 / Cấp độ A1 (TOCFL Level 1 / HSK 3) [500-600字]</option>
+              <option value="A2">基礎級 / Cấp độ A2 (TOCFL Level 2 / HSK 4) [1000-1200字]</option>
+              <option value="B1B2">中級 / Cấp độ B1-B2 (TOCFL Level 3-4 / HSK 5-6) [2500-5000字]</option>
+              <option value="C1C2">高級 / Cấp độ C1-C2 (TOCFL Level 5-6) [8000字以上]</option>
+            </select>
+          </div>
+        )}
 
         <button type="submit" disabled={isLoading} className="mt-6 w-full py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 font-bold text-lg shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all transform hover:scale-[1.02] active:scale-95 text-white disabled:opacity-50">
           {isLoading ? "處理中..." : (role === 'student' ? f.submitStudent : f.submitTeacher)}
