@@ -7,6 +7,7 @@ const AnalyticsTab = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [nameFilter, setNameFilter] = useState('');
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -71,24 +72,44 @@ const AnalyticsTab = () => {
     new Audio(url).play();
   };
 
-  const filteredLogs = logs.filter(log => 
-    log.user_id.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    log.target_word.includes(searchTerm) ||
-    log.audio_filename.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const uniqueNames = [...new Set(logs.map(log => log.name).filter(Boolean))].sort();
+
+  const filteredLogs = logs.filter(log => {
+    const matchesSearch = log.user_id.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      (log.name && log.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      log.target_word.includes(searchTerm) ||
+      log.audio_filename.toLowerCase().includes(searchTerm.toLowerCase());
+      
+    const matchesName = nameFilter === '' || log.name === nameFilter;
+    
+    return matchesSearch && matchesName;
+  });
 
   return (
     <div className="flex flex-col h-[80vh]">
       <div className="flex justify-between items-center mb-6">
-        <div className="relative w-96">
-          <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input 
-            type="text" 
-            placeholder="搜尋學生代號、字詞或檔名..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-all shadow-inner"
-          />
+        <div className="flex gap-4 items-center">
+          <div className="relative w-80">
+            <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input 
+              type="text" 
+              placeholder="搜尋代號、名字、字詞或檔名..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-all shadow-inner"
+            />
+          </div>
+          
+          <select
+            value={nameFilter}
+            onChange={(e) => setNameFilter(e.target.value)}
+            className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-all shadow-inner appearance-none min-w-[150px]"
+          >
+            <option value="">所有學生名字</option>
+            {uniqueNames.map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
         </div>
         
         <div className="flex gap-4">
@@ -113,10 +134,11 @@ const AnalyticsTab = () => {
 
       <div className="flex-1 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col">
         <div className="flex-1 overflow-x-auto">
-          <div className="min-w-[1800px]">
-            <div className="grid grid-cols-14 gap-2 p-4 border-b border-slate-800 bg-slate-950 font-bold text-slate-400 text-xs">
+          <div className="min-w-[1900px]">
+            <div className="grid grid-cols-15 gap-2 p-4 border-b border-slate-800 bg-slate-950 font-bold text-slate-400 text-xs">
               <div className="col-span-1">錄製時間</div>
               <div className="col-span-1">學生ID</div>
+              <div className="col-span-1">名字</div>
               <div className="col-span-1">國籍 / 出生地</div>
               <div className="col-span-1">程度 / 性別</div>
               <div className="col-span-1">練習項目</div>
@@ -134,9 +156,10 @@ const AnalyticsTab = () => {
                 <div className="flex justify-center items-center h-64 text-slate-500">沒有找到符合的紀錄</div>
               ) : (
                 filteredLogs.map((log, i) => (
-                  <div key={log.id} className={`grid grid-cols-14 gap-2 p-4 items-center border-b border-slate-800/50 hover:bg-slate-800/50 transition-colors text-xs ${i % 2 === 0 ? 'bg-slate-900/30' : ''}`}>
+                  <div key={log.id} className={`grid grid-cols-15 gap-2 p-4 items-center border-b border-slate-800/50 hover:bg-slate-800/50 transition-colors text-xs ${i % 2 === 0 ? 'bg-slate-900/30' : ''}`}>
                     <div className="col-span-1 text-slate-400">{new Date(log.created_at).toLocaleString()}</div>
                     <div className="col-span-1 font-mono text-cyan-400 font-bold">{log.user_id}</div>
+                    <div className="col-span-1 text-slate-200 font-bold">{log.name || '-'}</div>
                     <div className="col-span-1 text-slate-300">
                       <div>{log.nationality}</div>
                       <div className="text-slate-500">{log.birthplace}</div>

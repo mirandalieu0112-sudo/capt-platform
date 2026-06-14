@@ -333,12 +333,12 @@ export default function FormP3({ role, lang, t, onSubmit, onBack }) {
             onChange={e => setFormData({...formData, chineseLevel: e.target.value})}
           >
             <option value="">{f.levelSelect}</option>
-            <option value="Native">母語 / Người bản xứ (Native Speaker)</option>
             <option value="A0">準備級 / Cấp độ chuẩn bị (TOCFL under A1 / HSK 1-2) [300字以下]</option>
             <option value="A1">入門級 / Cấp độ A1 (TOCFL Level 1 / HSK 3) [500-600字]</option>
             <option value="A2">基礎級 / Cấp độ A2 (TOCFL Level 2 / HSK 4) [1000-1200字]</option>
             <option value="B1B2">中級 / Cấp độ B1-B2 (TOCFL Level 3-4 / HSK 5-6) [2500-5000字]</option>
             <option value="C1C2">高級 / Cấp độ C1-C2 (TOCFL Level 5-6) [8000字以上]</option>
+            <option value="Native">母語 / Người bản xứ (Native Speaker)</option>
           </select>
         </div>
 

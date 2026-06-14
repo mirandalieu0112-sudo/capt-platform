@@ -161,10 +161,27 @@ async def upload_audio(
         chinese_level = user['chinese_level'] if user and user['chinese_level'] else "未知"
         gender = user['gender'] if user and user['gender'] else "未知"
         
-        # Format: 學生名字_國籍_學生母語_學生出生地_錄製號碼_錄製的字詞_中文程度_性別.wav
+        # Format Mappings
+        nat_mapped = "越南" if nationality == "vn" else nationality
+        lang_mapped = "越南語" if native_language == "vn" else native_language
+        
+        if chinese_level == "A0":
+            level_mapped = "準備級"
+        elif chinese_level == "Native":
+            level_mapped = "母語"
+        else:
+            level_mapped = chinese_level
+            
+        if gender.lower() in ['female', 'f', '女']:
+            gender_mapped = "F"
+        elif gender.lower() in ['male', 'm', '男']:
+            gender_mapped = "M"
+        else:
+            gender_mapped = gender
+        
+        # Format: UserID_Nationality_Birthplace_AttemptNumber_Word_NativeLanguage_ChineseLevel_Gender.wav
         clean_word = target_word.split(" ")[0].replace("/", "_")
-        name_for_file = user['name'] if user and user['name'] else user_id
-        final_filename = f"{name_for_file}_{nationality}_{native_language}_{birthplace}_{attempt_number}_{clean_word}_{chinese_level}_{gender}.wav"
+        final_filename = f"{user_id}_{nat_mapped}_{birthplace}_{attempt_number}_{clean_word}_{lang_mapped}_{level_mapped}_{gender_mapped}.wav"
         final_path = os.path.join(database.AUDIO_DIR, final_filename)
         
         # Save audio permanently (temp first)
@@ -359,6 +376,7 @@ def get_all_audio_logs():
             s.id as raw_id,
             s.created_at, 
             s.user_id, 
+            u.name,
             u.nationality, 
             u.birthplace, 
             '口說' as type, 
@@ -382,6 +400,7 @@ def get_all_audio_logs():
             l.id as raw_id,
             l.created_at, 
             l.user_id, 
+            u.name,
             u.nationality, 
             u.birthplace, 
             '聽力' as type, 
