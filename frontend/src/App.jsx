@@ -6,6 +6,7 @@ import FormP3 from './components/FormP3';
 import InstructionModal from './components/InstructionModal';
 import PlatformManualModal from './components/PlatformManualModal';
 import AdminDashboard from './components/AdminDashboard';
+import DataReviewTab from './components/DataReviewTab';
 import Forum from './components/Forum';
 import PracticeHistory from './components/PracticeHistory';
 import { levels } from './data/levels';
@@ -489,24 +490,29 @@ function App() {
               onClick={() => { setMode('listening'); }} 
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${mode === 'listening' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'}`}
             >
-              {t.listening_test}
+              {userData?.role === 'teacher' ? "語音審聽 (Review)" : t.listening_test}
             </button>
             <button 
               onClick={() => {
-                if (completedListeningLevels.includes(currentLevel.id)) {
+                if (userData?.role === 'teacher' || completedListeningLevels.includes(currentLevel.id)) {
                   switchToSpeaking();
                 }
               }} 
-              disabled={!completedListeningLevels.includes(currentLevel.id)}
-              className={`flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${mode === 'speaking' ? 'bg-cyan-600 text-white' : !completedListeningLevels.includes(currentLevel.id) ? 'text-slate-600 cursor-not-allowed opacity-50' : 'text-slate-400 hover:text-slate-200'}`}
+              disabled={userData?.role !== 'teacher' && !completedListeningLevels.includes(currentLevel.id)}
+              className={`flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${mode === 'speaking' ? 'bg-cyan-600 text-white' : (userData?.role !== 'teacher' && !completedListeningLevels.includes(currentLevel.id)) ? 'text-slate-600 cursor-not-allowed opacity-50' : 'text-slate-400 hover:text-slate-200'}`}
             >
-              {!completedListeningLevels.includes(currentLevel.id) && <Lock className="w-4 h-4" />}
-              {t.speaking_test}
+              {(userData?.role !== 'teacher' && !completedListeningLevels.includes(currentLevel.id)) && <Lock className="w-4 h-4" />}
+              {userData?.role === 'teacher' ? "標準音錄製 (Record)" : t.speaking_test}
             </button>
           </div>
         </div>
 
         {mode === 'listening' ? (
+          userData?.role === 'teacher' ? (
+            <div className="w-full mt-4">
+               <DataReviewTab adminName={userData?.name || 'Teacher'} initialWord={activeWord} />
+            </div>
+          ) : (
           <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-10 text-center max-w-3xl mx-auto shadow-2xl">
             <h3 className="text-2xl mb-8 font-bold text-slate-200">{t.listen_desc}</h3>
             
@@ -639,6 +645,7 @@ function App() {
             
             <p className="text-slate-500 mt-12 text-sm">{t.tts_note}</p>
           </div>
+          )
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="flex flex-col gap-6">

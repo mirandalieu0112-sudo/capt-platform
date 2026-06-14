@@ -303,10 +303,57 @@ async def post_teacher_review(review: TeacherReview):
 def get_all_audio_logs():
     conn = database.get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT id, user_id, target_word, audio_filename, attempt_number, created_at FROM speaking_logs ORDER BY created_at DESC")
-    logs = [dict(row) for row in c.fetchall()]
+    
+    # Speaking Logs
+    c.execute('''
+        SELECT 
+            'speaking_' || s.id as id, 
+            s.id as raw_id,
+            s.created_at, 
+            s.user_id, 
+            u.nationality, 
+            u.birthplace, 
+            '口說' as type, 
+            '' as result, 
+            s.target_word, 
+            u.chinese_level, 
+            u.gender, 
+            s.audio_filename, 
+            s.attempt_number,
+            s.f0, s.f1, s.f2, s.f3, s.cog, s.vot_estimate
+        FROM speaking_logs s
+        LEFT JOIN users u ON s.user_id = u.user_id
+    ''')
+    speaking = [dict(row) for row in c.fetchall()]
+    
+    # Listening Logs
+    c.execute('''
+        SELECT 
+            'listening_' || l.id as id, 
+            l.id as raw_id,
+            l.created_at, 
+            l.user_id, 
+            u.nationality, 
+            u.birthplace, 
+            '聽力' as type, 
+            CASE WHEN l.is_correct = 1 THEN '答對' ELSE '答錯' END as result, 
+            l.target_word, 
+            u.chinese_level, 
+            u.gender, 
+            '' as audio_filename, 
+            '' as attempt_number,
+            null as f0, null as f1, null as f2, null as f3, null as cog, null as vot_estimate
+        FROM listening_logs l
+        LEFT JOIN users u ON l.user_id = u.user_id
+    ''')
+    listening = [dict(row) for row in c.fetchall()]
+    
     conn.close()
-    return {"status": "success", "logs": logs}
+    
+    all_logs = speaking + listening
+    all_logs.sort(key=lambda x: x['created_at'], reverse=True)
+    
+    return {"status": "success", "logs": all_logs}
 
 @app.get("/api/audio/{filename}")
 def get_audio_file(filename: str):
@@ -316,20 +363,30 @@ def get_audio_file(filename: str):
     return {"status": "error", "message": "File not found"}
 
 @app.delete("/api/admin/audio/{log_id}")
-def delete_audio_log(log_id: int):
+def delete_audio_log(log_id: str):
     conn = database.get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT audio_filename FROM speaking_logs WHERE id = ?", (log_id,))
-    row = c.fetchone()
-    if row:
-        filename = row['audio_filename']
-        file_path = os.path.join(database.AUDIO_DIR, filename)
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        c.execute("DELETE FROM speaking_logs WHERE id = ?", (log_id,))
+    
+    if log_id.startswith('speaking_'):
+        real_id = int(log_id.replace('speaking_', ''))
+        c.execute("SELECT audio_filename FROM speaking_logs WHERE id = ?", (real_id,))
+        row = c.fetchone()
+        if row:
+            filename = row['audio_filename']
+            file_path = os.path.join(database.AUDIO_DIR, filename)
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            c.execute("DELETE FROM speaking_logs WHERE id = ?", (real_id,))
+            conn.commit()
+            conn.close()
+            return {"status": "success"}
+    elif log_id.startswith('listening_'):
+        real_id = int(log_id.replace('listening_', ''))
+        c.execute("DELETE FROM listening_logs WHERE id = ?", (real_id,))
         conn.commit()
         conn.close()
         return {"status": "success"}
+        
     conn.close()
     return {"status": "error", "message": "Log not found"}
 
