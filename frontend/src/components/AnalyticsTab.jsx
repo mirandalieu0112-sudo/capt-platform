@@ -111,6 +111,7 @@ const AnalyticsTab = () => {
         </div>
       </div>
 
+      <div className="flex-1 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col">
         <div className="flex-1 overflow-x-auto">
           <div className="min-w-[1500px]">
             <div className="grid grid-cols-12 gap-2 p-4 border-b border-slate-800 bg-slate-950 font-bold text-slate-400 text-xs">
@@ -182,7 +183,6 @@ const AnalyticsTab = () => {
                   </div>
                 ))
               )}
-            </div>
           </div>
         </div>
       </div>
