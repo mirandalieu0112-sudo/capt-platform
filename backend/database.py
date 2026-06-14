@@ -3,7 +3,7 @@ import os
 import json
 from datetime import datetime
 
-DB_FILE = "capt_data.db"
+DB_FILE = "data/capt_data.db"
 AUDIO_DIR = "data/audio"
 
 def init_db():
