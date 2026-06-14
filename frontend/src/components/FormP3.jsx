@@ -128,7 +128,13 @@ export default function FormP3({ role, lang, t, onSubmit, onBack }) {
   };
 
   const handleProvinceChange = (e) => {
-    setFormData({ ...formData, province: e.target.value, region: e.target.value });
+    const p = e.target.value;
+    let r = '';
+    if (vnProvinces.north.provinces.includes(p)) r = '北越';
+    else if (vnProvinces.central.provinces.includes(p)) r = '中越';
+    else if (vnProvinces.south.provinces.includes(p)) r = '南越';
+    
+    setFormData({ ...formData, province: p, region: r });
   };
 
   const handleSubmit = async (e) => {
@@ -141,7 +147,9 @@ export default function FormP3({ role, lang, t, onSubmit, onBack }) {
       data.append('class_name', formData.className === 'other' ? formData.classNameOther : formData.className);
       data.append('nationality', formData.nationality === 'other' ? formData.nationalityOther : formData.nationality);
       data.append('native_language', formData.nativeLanguage === 'other' ? formData.nativeLanguageOther : formData.nativeLanguage);
-      data.append('birthplace', formData.province);
+      
+      // Send the mapped region (北越/中越/南越) instead of the specific province
+      data.append('birthplace', formData.nationality === 'vn' ? formData.region : formData.province);
       data.append('chinese_level', formData.chineseLevel);
       data.append('gender', formData.gender);
 
@@ -266,22 +274,27 @@ export default function FormP3({ role, lang, t, onSubmit, onBack }) {
 
         {/* Birthplace (Only if VN) */}
         {formData.nationality === 'vn' && (
-          <div className="space-y-4">
-          <label className="block text-slate-300 font-medium">
-            <span className="text-rose-500 mr-1">*</span>{f.birthplaceLabel}
-          </label>
-          <select 
-            value={formData.province}
-            onChange={handleProvinceChange}
-            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all text-slate-200"
-            required
-          >
-            <option value="" disabled>{f.birthplaceSelect}</option>
-            <option value="北越">北越 (North Vietnam)</option>
-            <option value="中越">中越 (Central Vietnam)</option>
-            <option value="南越">南越 (South Vietnam)</option>
-          </select>
-        </div>
+          <div>
+            <label className="block text-sm text-slate-400 mb-1">{f.birthplaceLabel}</label>
+            <select 
+              required
+              className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all"
+              value={formData.province}
+              onChange={handleProvinceChange}
+            >
+              <option value="">{f.birthplaceSelect}</option>
+              <optgroup label={vnProvinces.north.label}>
+                {vnProvinces.north.provinces.map(p => <option key={p} value={p}>{p}</option>)}
+              </optgroup>
+              <optgroup label={vnProvinces.central.label}>
+                {vnProvinces.central.provinces.map(p => <option key={p} value={p}>{p}</option>)}
+              </optgroup>
+              <optgroup label={vnProvinces.south.label}>
+                {vnProvinces.south.provinces.map(p => <option key={p} value={p}>{p}</option>)}
+              </optgroup>
+            </select>
+            {formData.region && <p className="text-xs text-cyan-400 mt-1 pl-1">{f.systemMap} {formData.region}</p>}
+          </div>
         )}
 
         {/* Native Language */}
