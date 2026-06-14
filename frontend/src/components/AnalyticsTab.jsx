@@ -113,16 +113,17 @@ const AnalyticsTab = () => {
 
       <div className="flex-1 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col">
         <div className="flex-1 overflow-x-auto">
-          <div className="min-w-[1500px]">
-            <div className="grid grid-cols-12 gap-2 p-4 border-b border-slate-800 bg-slate-950 font-bold text-slate-400 text-xs">
+          <div className="min-w-[1800px]">
+            <div className="grid grid-cols-14 gap-2 p-4 border-b border-slate-800 bg-slate-950 font-bold text-slate-400 text-xs">
               <div className="col-span-1">錄製時間</div>
               <div className="col-span-1">學生ID</div>
               <div className="col-span-1">國籍 / 出生地</div>
               <div className="col-span-1">程度 / 性別</div>
               <div className="col-span-1">練習項目</div>
-              <div className="col-span-1">字詞 / 答對錯</div>
+              <div className="col-span-1">字詞 / 分數 (答對錯)</div>
               <div className="col-span-2">錄製檔案 (.wav)</div>
-              <div className="col-span-3">物理數據 (F0, F1~F3, VOT...)</div>
+              <div className="col-span-2">物理數據 (F0, F1~F3, VOT...)</div>
+              <div className="col-span-3">聲學特徵 (問題與建議)</div>
               <div className="col-span-1 text-right">操作</div>
             </div>
             
@@ -133,7 +134,7 @@ const AnalyticsTab = () => {
                 <div className="flex justify-center items-center h-64 text-slate-500">沒有找到符合的紀錄</div>
               ) : (
                 filteredLogs.map((log, i) => (
-                  <div key={log.id} className={`grid grid-cols-12 gap-2 p-4 items-center border-b border-slate-800/50 hover:bg-slate-800/50 transition-colors text-xs ${i % 2 === 0 ? 'bg-slate-900/30' : ''}`}>
+                  <div key={log.id} className={`grid grid-cols-14 gap-2 p-4 items-center border-b border-slate-800/50 hover:bg-slate-800/50 transition-colors text-xs ${i % 2 === 0 ? 'bg-slate-900/30' : ''}`}>
                     <div className="col-span-1 text-slate-400">{new Date(log.created_at).toLocaleString()}</div>
                     <div className="col-span-1 font-mono text-cyan-400 font-bold">{log.user_id}</div>
                     <div className="col-span-1 text-slate-300">
@@ -155,13 +156,16 @@ const AnalyticsTab = () => {
                         <div className={`mt-1 font-bold ${log.result === '答對' ? 'text-emerald-400' : 'text-rose-400'}`}>{log.result}</div>
                       )}
                       {log.type === '口說' && (
-                        <div className="text-slate-500 mt-1">第 {log.attempt_number} 次</div>
+                        <>
+                          <div className="text-yellow-400 mt-1 font-bold">{log.score !== null ? `${log.score} 分` : 'N/A'}</div>
+                          <div className="text-slate-500 mt-1">第 {log.attempt_number} 次</div>
+                        </>
                       )}
                     </div>
                     <div className="col-span-2 font-mono text-slate-500 truncate" title={log.audio_filename}>
                       {log.audio_filename || '-'}
                     </div>
-                    <div className="col-span-3 text-slate-400 font-mono text-[10px] leading-tight break-all">
+                    <div className="col-span-2 text-slate-400 font-mono text-[10px] leading-tight break-all">
                       {log.type === '口說' ? (
                         <>
                           F0: {log.f0 ? parseFloat(log.f0).toFixed(1) : 'N/A'}, F1: {log.f1 ? parseFloat(log.f1).toFixed(1) : 'N/A'}<br/>
@@ -170,6 +174,9 @@ const AnalyticsTab = () => {
                           COG: {log.cog ? parseFloat(log.cog).toFixed(1) : 'N/A'}, VOT: {log.vot_estimate ? parseFloat(log.vot_estimate).toFixed(3) : 'N/A'}
                         </>
                       ) : '-'}
+                    </div>
+                    <div className="col-span-3 text-emerald-300 text-[11px] leading-relaxed break-all pr-2">
+                      {log.type === '口說' ? (log.feedback_text || '-') : '-'}
                     </div>
                     <div className="col-span-1 flex justify-end gap-1">
                       {log.type === '口說' && log.audio_filename && (

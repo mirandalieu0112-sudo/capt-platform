@@ -365,9 +365,8 @@ function App() {
 
       const data = await response.json();
       if (data.status === 'success') {
-        const cog = data.acoustic_features.COG;
-        const targetType = cog > 4500 ? 'c' : 'ch'; 
-        const score = calculateScore(cog, targetType);
+        const score = data.score !== null ? data.score : 0;
+        const targetType = activeWord.toLowerCase().includes('ch') ? 'ch' : 'c';
         const stars = getStars(score);
         const feedback = getSandwichFeedback(score, targetType, lang);
         

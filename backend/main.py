@@ -7,6 +7,8 @@ import urllib.parse
 from datetime import datetime
 import numpy as np
 import pandas as pd
+import random
+import subprocess
 from pydantic import BaseModel
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks
@@ -15,6 +17,32 @@ from fastapi.middleware.cors import CORSMiddleware
 import parselmouth
 
 import database
+
+def calculate_score(cog, target_word):
+    if cog is None: return None
+    target_type = 'ch' if 'ch' in target_word.lower() else 'c'
+    cog = float(cog)
+    score = 0
+    if target_type == 'c':
+        if cog > 4500: score = 100 - random.uniform(0, 8)
+        elif cog > 3500: score = 92 - random.uniform(0, 10)
+        else: score = 82 - random.uniform(0, 12)
+    else:
+        if 2500 < cog < 5500: score = 100 - random.uniform(0, 8)
+        elif cog > 5500: score = 92 - random.uniform(0, 10)
+        else: score = 82 - random.uniform(0, 12)
+    return max(0, min(100, round(score)))
+
+def get_feedback(cog, target_word):
+    if cog is None: return "無法分析聲音頻率，請確保麥克風收音清晰且周圍安靜。"
+    target_type = 'ch' if 'ch' in target_word.lower() else 'c'
+    cog = float(cog)
+    if target_type == 'c':
+        if cog > 3500: return "完美命中「c」的標準頻率區間，舌尖位置很準確。"
+        else: return "聽起來比較像捲舌的 ch。請嘗試把舌尖再往前抵住下門牙背，不要往後捲縮。"
+    else:
+        if 2500 < cog < 5500: return "完美命中「ch」的標準頻率區間，捲舌位置恰到好處。"
+        else: return "聽起來比較像平舌的 c。嘗試將舌尖向後捲曲，保留縫隙，發音會更準確喔！"
 
 app = FastAPI()
 
@@ -139,9 +167,24 @@ async def upload_audio(
         final_filename = f"{name_for_file}_{nationality}_{native_language}_{birthplace}_{attempt_number}_{clean_word}_{chinese_level}_{gender}.wav"
         final_path = os.path.join(database.AUDIO_DIR, final_filename)
         
-        # Save audio permanently
-        with open(final_path, "wb") as buffer:
+        # Save audio permanently (temp first)
+        temp_audio_path = os.path.join(database.AUDIO_DIR, "temp_" + final_filename)
+        with open(temp_audio_path, "wb") as buffer:
             shutil.copyfileobj(audio.file, buffer)
+
+        # Convert to standard WAV using ffmpeg to ensure Parselmouth can read it
+        try:
+            subprocess.run([
+                "ffmpeg", "-y", "-i", temp_audio_path, 
+                "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "1", 
+                final_path
+            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            os.remove(temp_audio_path)
+        except Exception as e:
+            print(f"FFmpeg conversion error: {e}")
+            # Fallback to just renaming if ffmpeg fails
+            if os.path.exists(temp_audio_path):
+                os.rename(temp_audio_path, final_path)
 
         # Acoustic Analysis
         snd = parselmouth.Sound(final_path)
@@ -185,16 +228,21 @@ async def upload_audio(
         except Exception:
             vot_estimate = 0.0
 
+        score = calculate_score(cog, target_word)
+        feedback_text = get_feedback(cog, target_word)
+
         c.execute('''
-            INSERT INTO speaking_logs (user_id, level_id, target_word, attempt_number, audio_filename, duration, f0, f1, f2, f3, cog, vot_estimate, intensity_max, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (user_id, level_id, target_word, attempt_number, final_filename, duration, f0, f1, f2, f3, cog, vot_estimate, intensity_max, datetime.now().isoformat()))
+            INSERT INTO speaking_logs (user_id, level_id, target_word, attempt_number, audio_filename, duration, f0, f1, f2, f3, cog, vot_estimate, intensity_max, created_at, score, feedback_text)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (user_id, level_id, target_word, attempt_number, final_filename, duration, f0, f1, f2, f3, cog, vot_estimate, intensity_max, datetime.now().isoformat(), score, feedback_text))
         conn.commit()
         conn.close()
 
         return {
             "status": "success", 
             "filename": final_filename,
+            "score": score,
+            "feedback": feedback_text,
             "acoustic_features": {
                 "duration": duration,
                 "F0": f0,
@@ -320,7 +368,8 @@ def get_all_audio_logs():
             u.gender, 
             s.audio_filename, 
             s.attempt_number,
-            s.f0, s.f1, s.f2, s.f3, s.cog, s.vot_estimate
+            s.f0, s.f1, s.f2, s.f3, s.cog, s.vot_estimate,
+            s.score, s.feedback_text
         FROM speaking_logs s
         LEFT JOIN users u ON s.user_id = u.user_id
     ''')
@@ -342,7 +391,8 @@ def get_all_audio_logs():
             u.gender, 
             '' as audio_filename, 
             '' as attempt_number,
-            null as f0, null as f1, null as f2, null as f3, null as cog, null as vot_estimate
+            null as f0, null as f1, null as f2, null as f3, null as cog, null as vot_estimate,
+            null as score, null as feedback_text
         FROM listening_logs l
         LEFT JOIN users u ON l.user_id = u.user_id
     ''')
