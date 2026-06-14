@@ -7,6 +7,8 @@ import urllib.parse
 from datetime import datetime
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel
+from typing import Optional
 from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -111,8 +113,7 @@ async def upload_audio(
     audio: UploadFile = File(...),
     user_id: str = Form("unknown"),
     level_id: int = Form(1),
-    target_word: str = Form("unknown"),
-    attempt_number: str = Form("1_1")
+    target_word: str = Form("unknown")
 ):
     try:
         # Fetch user info for naming convention
@@ -121,9 +122,11 @@ async def upload_audio(
         c.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
         user = c.fetchone()
         
-        # Audio formatting uses S1 instead of the real name
-        # "學生名字_國籍... -> 這裡的學生名字我們沿用 S1 / T1 來當作匿名學術代號"
-        name = user['user_id'] if user else user_id
+        # Calculate attempt number
+        c.execute("SELECT COUNT(*) FROM speaking_logs WHERE user_id = ? AND target_word = ?", (user_id, target_word))
+        count = c.fetchone()[0]
+        attempt_number = f"{count + 1}_3"
+        
         nationality = user['nationality'] if user and user['nationality'] else "未知"
         native_language = user['native_language'] if user and user['native_language'] else "未知"
         birthplace = user['birthplace'] if user and user['birthplace'] else "未知"
@@ -132,7 +135,8 @@ async def upload_audio(
         
         # Format: 學生名字_國籍_學生母語_學生出生地_錄製號碼_錄製的字詞_中文程度_性別.wav
         clean_word = target_word.split(" ")[0].replace("/", "_")
-        final_filename = f"{name}_{nationality}_{native_language}_{birthplace}_{attempt_number}_{clean_word}_{chinese_level}_{gender}.wav"
+        name_for_file = user['name'] if user and user['name'] else user_id
+        final_filename = f"{name_for_file}_{nationality}_{native_language}_{birthplace}_{attempt_number}_{clean_word}_{chinese_level}_{gender}.wav"
         final_path = os.path.join(database.AUDIO_DIR, final_filename)
         
         # Save audio permanently
@@ -239,7 +243,27 @@ def export_data():
     users_df = pd.read_sql_query("SELECT * FROM users", conn)
     listening_df = pd.read_sql_query("SELECT * FROM listening_logs", conn)
     speaking_df = pd.read_sql_query("SELECT * FROM speaking_logs", conn)
+    
+    try:
+        reviews_df = pd.read_sql_query("SELECT * FROM teacher_reviews", conn)
+    except:
+        reviews_df = pd.DataFrame()
+        
     conn.close()
+    
+    # Add Advanced Acoustic Features to Speaking Logs
+    if not speaking_df.empty:
+        if 'f3' in speaking_df.columns and 'f2' in speaking_df.columns:
+            speaking_df['f3_minus_f2'] = speaking_df['f3'] - speaking_df['f2']
+        
+        # Add empty columns for manual PRAAT analysis later
+        speaking_df['單元音聲學特性(Vowel)'] = ""
+        speaking_df['輔音聲學特性(Consonant)'] = ""
+        speaking_df['COT'] = ""
+        
+    # Convert reaction time to seconds for Listening Logs
+    if not listening_df.empty and 'reaction_time_ms' in listening_df.columns:
+        listening_df['reaction_time_s'] = listening_df['reaction_time_ms'] / 1000.0
     
     # Save to Excel
     export_path = "data/capt_data_export.xlsx"
@@ -247,8 +271,67 @@ def export_data():
         users_df.to_excel(writer, sheet_name="Users", index=False)
         listening_df.to_excel(writer, sheet_name="Listening Logs", index=False)
         speaking_df.to_excel(writer, sheet_name="Speaking Logs", index=False)
+        reviews_df.to_excel(writer, sheet_name="Teacher Reviews", index=False)
         
     return FileResponse(export_path, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', filename='CAPT_Research_Data.xlsx')
+
+class TeacherReview(BaseModel):
+    teacher_name: str
+    target_word: str
+    audio_type: str
+    audio_filename: str
+    is_correct: bool
+    confidence_score: int
+    feedback_duration: Optional[str] = ""
+    feedback_volume: Optional[str] = ""
+    feedback_comfort: Optional[str] = ""
+    feedback_aspiration: Optional[str] = ""
+
+@app.post("/api/teacher/review")
+async def post_teacher_review(review: TeacherReview):
+    conn = database.get_db_connection()
+    c = conn.cursor()
+    c.execute('''
+        INSERT INTO teacher_reviews (teacher_name, target_word, audio_type, audio_filename, is_correct, confidence_score, feedback_duration, feedback_volume, feedback_comfort, feedback_aspiration, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (review.teacher_name, review.target_word, review.audio_type, review.audio_filename, review.is_correct, review.confidence_score, review.feedback_duration, review.feedback_volume, review.feedback_comfort, review.feedback_aspiration, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+@app.get("/api/admin/audio_logs")
+def get_all_audio_logs():
+    conn = database.get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT id, user_id, target_word, audio_filename, attempt_number, created_at FROM speaking_logs ORDER BY created_at DESC")
+    logs = [dict(row) for row in c.fetchall()]
+    conn.close()
+    return {"status": "success", "logs": logs}
+
+@app.get("/api/audio/{filename}")
+def get_audio_file(filename: str):
+    file_path = os.path.join(database.AUDIO_DIR, filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path, media_type="audio/wav")
+    return {"status": "error", "message": "File not found"}
+
+@app.delete("/api/admin/audio/{log_id}")
+def delete_audio_log(log_id: int):
+    conn = database.get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT audio_filename FROM speaking_logs WHERE id = ?", (log_id,))
+    row = c.fetchone()
+    if row:
+        filename = row['audio_filename']
+        file_path = os.path.join(database.AUDIO_DIR, filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        c.execute("DELETE FROM speaking_logs WHERE id = ?", (log_id,))
+        conn.commit()
+        conn.close()
+        return {"status": "success"}
+    conn.close()
+    return {"status": "error", "message": "Log not found"}
 
 @app.get("/api/forum/posts")
 def get_forum_posts():

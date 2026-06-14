@@ -67,6 +67,24 @@ def init_db():
         )
     ''')
 
+    # Teacher Reviews Table
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS teacher_reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            teacher_name TEXT,
+            target_word TEXT,
+            audio_type TEXT,
+            audio_filename TEXT,
+            is_correct BOOLEAN,
+            confidence_score INTEGER,
+            feedback_duration TEXT,
+            feedback_volume TEXT,
+            feedback_comfort TEXT,
+            feedback_aspiration TEXT,
+            created_at TEXT
+        )
+    ''')
+
     # Forum Posts Table
     c.execute('''
         CREATE TABLE IF NOT EXISTS forum_posts (

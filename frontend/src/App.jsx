@@ -890,7 +890,7 @@ function App() {
   };
 
   if (step === 999) {
-    return <AdminDashboard onBack={() => setStep(1)} />;
+    return <AdminDashboard onBack={() => setStep(1)} adminName={userData?.name || "Teacher"} />;
   }
 
   return (
