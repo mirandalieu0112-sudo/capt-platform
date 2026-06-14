@@ -1,16 +1,14 @@
 export const calculateScore = (cog, targetType) => {
-  // Mock scoring logic based on COG
-  // For c (舌尖前音), target COG is generally higher (> 5000Hz)
-  // For ch (舌尖後音), target COG is lower (3000-4500Hz)
+  // Relaxed scoring logic based on COG to encourage students
   let score = 0;
   if (targetType === 'c') {
-    if (cog > 5000) score = 95 - Math.random() * 5; // 90-95
-    else if (cog > 4000) score = 80 - Math.random() * 5; // 75-80
-    else score = 65 - Math.random() * 10; // 55-65
+    if (cog > 4500) score = 100 - Math.random() * 8; // 92-100
+    else if (cog > 3500) score = 92 - Math.random() * 10; // 82-92
+    else score = 82 - Math.random() * 12; // 70-82
   } else {
-    if (cog > 3000 && cog < 4800) score = 95 - Math.random() * 5;
-    else if (cog > 4800) score = 80 - Math.random() * 5;
-    else score = 65 - Math.random() * 10;
+    if (cog > 2500 && cog < 5500) score = 100 - Math.random() * 8; // 92-100
+    else if (cog > 5500) score = 92 - Math.random() * 10; // 82-92
+    else score = 82 - Math.random() * 12; // 70-82
   }
   return Math.max(0, Math.min(100, Math.round(score)));
 };
