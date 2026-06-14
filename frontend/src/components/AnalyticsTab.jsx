@@ -183,6 +183,7 @@ const AnalyticsTab = () => {
                   </div>
                 ))
               )}
+            </div>
           </div>
         </div>
       </div>
