@@ -4,6 +4,7 @@ import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip as Recharts
 import { Mic, Square, Loader2, Play, Lock, Star, ChevronLeft, ChevronRight, Volume2, Unlock, Sparkles, Target, Activity, Award, Info, CheckCircle2, Eye, EyeOff, PlayCircle, DownloadCloud, UploadCloud } from 'lucide-react';
 import FormP3 from './components/FormP3';
 import InstructionModal from './components/InstructionModal';
+import PlatformManualModal from './components/PlatformManualModal';
 import AdminDashboard from './components/AdminDashboard';
 import Forum from './components/Forum';
 import PracticeHistory from './components/PracticeHistory';
@@ -49,7 +50,18 @@ const i18n = {
     btn_replay: "聆聽錄製",
     btn_download: "下載錄音",
     btn_upload: "上傳音檔",
-    btn_history: "今日練習紀錄"
+    btn_history: "今日練習紀錄",
+    manual_btn: "📖 平台說明書",
+    manual_title: "平台使用說明書",
+    manual_audience_title: "平台對象與理念",
+    manual_audience_content: "針對想要改善中文發音的非母語學習者（特別是越南語母語者）。透過遊戲化的闖關地圖，結合 AI 即時檢測與夾心餅乾式回饋，讓您在無壓力情境下精準校正發音位置。",
+    manual_listen_title: "1. 如何練習聽力",
+    manual_listen_content: "進入關卡後，點擊「喇叭圖示」聆聽標準發音，選擇您認為正確的拼音或字詞。必須完成聽力測驗，才能解鎖口說練習！",
+    manual_speak_title: "2. 如何練習口說",
+    manual_speak_content: "聽力過關解鎖後，長按畫面下方的「麥克風按鈕」開始錄音，對著麥克風清楚唸出目標詞彙，鬆開按鈕即會自動送出並開始分析。",
+    manual_score_title: "3. 發音分數與學習紀錄",
+    manual_score_content: "每次錄音系統會給予 0~100 分及 1~3 顆星，並搭配「夾心餅乾回饋」給予具體發音建議。您可以點擊「今日練習紀錄」隨時查看學習成效。",
+    close: "關閉"
   },
   vi: {
     welcome: "Chào mừng đến với Nền tảng Luyện phát âm tiếng Trung AI",
@@ -87,7 +99,18 @@ const i18n = {
     btn_replay: "Nghe lại bản thu",
     btn_download: "Tải xuống",
     btn_upload: "Tải lên tệp âm thanh",
-    btn_history: "Lịch sử luyện tập"
+    btn_history: "Lịch sử luyện tập",
+    manual_btn: "📖 Hướng dẫn sử dụng",
+    manual_title: "Hướng dẫn sử dụng nền tảng",
+    manual_audience_title: "Đối tượng & Mục tiêu",
+    manual_audience_content: "Dành cho người học tiếng Trung không phải tiếng mẹ đẻ (đặc biệt là người Việt) muốn cải thiện phát âm. Thông qua bản đồ trò chơi, kết hợp đánh giá AI và phản hồi kẹp chả, giúp bạn chỉnh sửa vị trí phát âm một cách tự nhiên.",
+    manual_listen_title: "1. Cách luyện nghe",
+    manual_listen_content: "Khi vào màn chơi, bấm vào 'biểu tượng loa' để nghe phát âm chuẩn, chọn từ hoặc pinyin bạn cho là đúng. Bạn phải hoàn thành phần nghe để mở khóa phần luyện nói!",
+    manual_speak_title: "2. Cách luyện nói",
+    manual_speak_content: "Sau khi mở khóa, nhấn giữ 'biểu tượng Micro' ở dưới cùng để ghi âm, đọc rõ từ khóa và thả tay để hệ thống tự động phân tích.",
+    manual_score_title: "3. Điểm số & Lịch sử học",
+    manual_score_content: "Mỗi lần ghi âm sẽ nhận điểm từ 0~100, 1~3 sao và 'phản hồi kẹp chả' chỉ dẫn cụ thể. Bạn có thể bấm 'Lịch sử luyện tập' để theo dõi tiến độ.",
+    close: "Đóng"
   },
   en: {
     welcome: "Welcome to AI Chinese Pronunciation Platform",
@@ -125,7 +148,18 @@ const i18n = {
     btn_replay: "Play Recording",
     btn_download: "Download",
     btn_upload: "Upload Audio",
-    btn_history: "Practice History"
+    btn_history: "Practice History",
+    manual_btn: "📖 Platform Guide",
+    manual_title: "Platform Instruction Manual",
+    manual_audience_title: "Target Audience & Philosophy",
+    manual_audience_content: "Designed for non-native learners (especially Vietnamese) to improve Chinese pronunciation. Through a gamified map, AI assessment, and sandwich feedback, it helps correct your pronunciation naturally.",
+    manual_listen_title: "1. Listening Practice",
+    manual_listen_content: "In a level, click the 'speaker icon' to listen to standard pronunciation, and select the correct pinyin/word. You must pass the listening test to unlock speaking!",
+    manual_speak_title: "2. Speaking Practice",
+    manual_speak_content: "Once unlocked, press and hold the 'Microphone' button to record. Read the target word clearly, and release the button to analyze.",
+    manual_score_title: "3. Scores & Records",
+    manual_score_content: "Each recording receives a 0-100 score, 1-3 stars, and 'sandwich feedback' for specific guidance. Check your 'Practice History' anytime to track progress.",
+    close: "Close"
   }
 };
 
@@ -139,6 +173,7 @@ function App() {
   const [unlockedLevels, setUnlockedLevels] = useState([1]); // Array of unlocked level IDs
   const [currentLevel, setCurrentLevel] = useState(null);
   const [showInstruction, setShowInstruction] = useState(false);
+  const [showPlatformManual, setShowPlatformManual] = useState(false);
   const [mode, setMode] = useState('listening'); // default to listening
   const [activeWord, setActiveWord] = useState('');
   const [seenInstructionLevels, setSeenInstructionLevels] = useState([]);
@@ -877,7 +912,13 @@ function App() {
             </h1>
           </div>
           
-          <div className="flex gap-2 z-50">
+          <div className="flex gap-2 z-50 items-center">
+            <button 
+              onClick={() => setShowPlatformManual(true)}
+              className="px-4 py-1.5 mr-2 rounded-full text-sm font-medium backdrop-blur-md bg-indigo-500/80 hover:bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.4)] transition-all flex items-center gap-2 border border-indigo-400/50"
+            >
+              <Info className="w-4 h-4" /> {t.manual_btn}
+            </button>
             {['zh', 'vi', 'en'].map(l => (
               <button 
                 key={l}
@@ -935,6 +976,7 @@ function App() {
       </div>
 
       <InstructionModal isOpen={showInstruction} onClose={() => setShowInstruction(false)} lang={lang} />
+      {showPlatformManual && <PlatformManualModal onClose={() => setShowPlatformManual(false)} t={t} />}
 
       <footer className="mt-auto pt-20 pb-6 w-full flex justify-center text-center">
         <span className="text-sm text-slate-500">
