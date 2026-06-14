@@ -392,7 +392,77 @@ function App() {
       }
   };
 
-  const renderLevelMap = () => (
+  const renderTeacherMenu = () => (
+    <div className="w-full max-w-4xl animate-in fade-in duration-500">
+      <div className="flex justify-between items-end mb-8">
+        <div>
+          <button 
+            onClick={() => setStep(2)} 
+            className="flex items-center gap-1 text-slate-400 hover:text-cyan-400 transition-colors mb-4 text-sm font-medium"
+          >
+            <ChevronLeft className="w-4 h-4" /> 返回
+          </button>
+          <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">教師協作與語音專區</h2>
+          <p className="text-slate-400 mt-2">感謝您的協助，請選擇您要進行的任務</p>
+        </div>
+        <div className="text-right">
+          <p className="text-sm text-slate-500">Teacher</p>
+          <p className="text-xl text-cyan-400 font-mono">{userData?.userId || userData?.name}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-4">
+          <div 
+            onClick={() => setStep(6)}
+            className="p-6 rounded-2xl border bg-slate-800/80 border-purple-500/50 hover:border-purple-400 cursor-pointer shadow-[0_0_20px_rgba(168,85,247,0.1)] hover:shadow-[0_0_30px_rgba(168,85,247,0.3)] hover:-translate-y-1 transition-all"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex gap-6 items-center flex-1">
+                <div className="w-16 h-16 rounded-full bg-purple-900/50 flex items-center justify-center border-2 border-purple-500/30">
+                   <Volume2 className="w-8 h-8 text-purple-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold text-slate-200 mb-2 group-hover:text-purple-400 transition-colors">
+                    1. 語音審聽與質性回饋
+                  </h3>
+                  <p className="text-slate-400 text-sm mb-4">
+                    協助聆聽並評估學生的發音音檔，給予專業回饋
+                  </p>
+                </div>
+              </div>
+              <Play className="w-8 h-8 text-purple-400" />
+            </div>
+          </div>
+
+          <div 
+            onClick={() => setStep(7)}
+            className="p-6 rounded-2xl border bg-slate-800/80 border-cyan-500/50 hover:border-cyan-400 cursor-pointer shadow-[0_0_20px_rgba(6,182,212,0.1)] hover:shadow-[0_0_30px_rgba(6,182,212,0.3)] hover:-translate-y-1 transition-all"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex gap-6 items-center flex-1">
+                <div className="w-16 h-16 rounded-full bg-cyan-900/50 flex items-center justify-center border-2 border-cyan-500/30">
+                   <Mic className="w-8 h-8 text-cyan-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold text-slate-200 mb-2 group-hover:text-cyan-400 transition-colors">
+                    2. 標準發音示範錄製
+                  </h3>
+                  <p className="text-slate-400 text-sm mb-4">
+                    錄製您的標準口音，協助完善系統 AI 評分模型
+                  </p>
+                </div>
+              </div>
+              <Play className="w-8 h-8 text-cyan-400" />
+            </div>
+          </div>
+      </div>
+    </div>
+  );
+
+  const renderLevelMap = () => {
+    if (userData?.role === 'teacher') return renderTeacherMenu();
+    
+    return (
     <div className="w-full max-w-4xl animate-in fade-in duration-500">
       <div className="flex justify-between items-end mb-8">
         <div>
@@ -450,14 +520,15 @@ function App() {
         })}
       </div>
     </div>
-  );
+    );
+  };
 
   const renderPracticeArea = () => {
     if (!currentLevel) return null;
     return (
       <div className="w-full max-w-5xl animate-in slide-in-from-bottom-8 duration-500">
         <button onClick={() => setStep(3)} className="flex items-center gap-2 text-slate-400 hover:text-cyan-400 transition-colors mb-6">
-          <ChevronLeft className="w-5 h-5" /> {t.back_to_map}
+          <ChevronLeft className="w-5 h-5" /> {userData?.role === 'teacher' ? '返回選單' : t.back_to_map}
         </button>
         
         <div className="flex items-center justify-between bg-slate-800/50 p-6 rounded-3xl border border-slate-700 mb-8 relative overflow-hidden">
@@ -485,12 +556,14 @@ function App() {
             </div>
           </div>
           <div className="flex gap-2 p-1 bg-slate-900 rounded-xl relative z-10">
-            <button 
-              onClick={() => { setMode('listening'); }} 
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${mode === 'listening' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'}`}
-            >
-              {userData?.role === 'teacher' ? "語音審聽 (Review)" : t.listening_test}
-            </button>
+            {userData?.role !== 'teacher' && (
+              <button 
+                onClick={() => { setMode('listening'); }} 
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${mode === 'listening' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                {t.listening_test}
+              </button>
+            )}
             <button 
               onClick={() => {
                 if (userData?.role === 'teacher' || completedListeningLevels.includes(currentLevel.id)) {
@@ -501,17 +574,12 @@ function App() {
               className={`flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${mode === 'speaking' ? 'bg-cyan-600 text-white' : (userData?.role !== 'teacher' && !completedListeningLevels.includes(currentLevel.id)) ? 'text-slate-600 cursor-not-allowed opacity-50' : 'text-slate-400 hover:text-slate-200'}`}
             >
               {(userData?.role !== 'teacher' && !completedListeningLevels.includes(currentLevel.id)) && <Lock className="w-4 h-4" />}
-              {userData?.role === 'teacher' ? "標準音錄製 (Record)" : t.speaking_test}
+              {userData?.role === 'teacher' ? "標準音錄製" : t.speaking_test}
             </button>
           </div>
         </div>
 
-        {mode === 'listening' ? (
-          userData?.role === 'teacher' ? (
-            <div className="w-full mt-4">
-               <DataReviewTab adminName={userData?.name || 'Teacher'} initialWord={activeWord} />
-            </div>
-          ) : (
+        {mode === 'listening' && userData?.role !== 'teacher' ? (
           <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-10 text-center max-w-3xl mx-auto shadow-2xl">
             <h3 className="text-2xl mb-8 font-bold text-slate-200">{t.listen_desc}</h3>
             
@@ -702,7 +770,7 @@ function App() {
                         }`}
                     >
                         {isRecording ? <Square className="w-6 h-6 animate-pulse" /> : <Mic className="w-6 h-6 group-hover:scale-110 transition-transform" />}
-                        <span className="relative z-10">{isRecording ? t.btn_stop_record : t.btn_start_speak}</span>
+                        <span className="relative z-10">{isRecording ? t.btn_stop_record : (userData?.role === 'teacher' ? '開始錄製標準音' : t.btn_start_speak)}</span>
                     </button>
                     
                     {/* Extra Features: Replay, Download, Upload */}
@@ -978,8 +1046,64 @@ function App() {
             {activeTab === 'map' ? renderLevelMap() : <Forum user={userData} lang={lang} />}
           </div>
         )}
-        {step === 4 && renderPracticeArea()}
-      </div>
+          {step === 4 && renderPracticeArea()}
+          {step === 5 && <AdminDashboard />}
+          {step === 6 && (
+            <div className="w-full max-w-5xl animate-in fade-in duration-500">
+              <button onClick={() => setStep(3)} className="flex items-center gap-2 text-slate-400 hover:text-cyan-400 transition-colors mb-6">
+                <ChevronLeft className="w-5 h-5" /> 返回選單
+              </button>
+              <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500 mb-8">語音審聽與質性回饋</h2>
+              <div className="bg-slate-800/30 rounded-3xl p-6 border border-slate-700/50">
+                <DataReviewTab adminName={userData?.name || userData?.userId || 'Teacher'} />
+              </div>
+            </div>
+          )}
+          {step === 7 && (
+            <div className="w-full max-w-4xl animate-in fade-in duration-500">
+              <div className="flex justify-between items-end mb-8">
+                <div>
+                  <button 
+                    onClick={() => setStep(3)} 
+                    className="flex items-center gap-1 text-slate-400 hover:text-cyan-400 transition-colors mb-4 text-sm font-medium"
+                  >
+                    <ChevronLeft className="w-4 h-4" /> 返回選單
+                  </button>
+                  <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">選擇要錄製示範音的任務</h2>
+                </div>
+              </div>
+              <div className="grid gap-4">
+                {levels.map(lvl => (
+                  <div 
+                    key={lvl.id}
+                    onClick={() => {
+                      setCurrentLevel(lvl);
+                      setMode('speaking');
+                      setActiveWord(lvl.speakingWords[0]);
+                      setStatus('idle');
+                      setStep(4);
+                    }}
+                    className="p-6 rounded-2xl border bg-slate-800/80 border-cyan-500/50 hover:border-cyan-400 cursor-pointer shadow-[0_0_20px_rgba(6,182,212,0.1)] hover:shadow-[0_0_30px_rgba(6,182,212,0.3)] hover:-translate-y-1 transition-all"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex gap-6 items-center flex-1">
+                        <div className="w-16 h-16 rounded-full bg-cyan-900/50 flex items-center justify-center border-2 border-cyan-500/30">
+                           <Mic className="w-8 h-8 text-cyan-400" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-xl font-bold text-slate-200 mb-2 group-hover:text-cyan-400 transition-colors">
+                            {lvl.speakingTitle[lang] || lvl.speakingTitle['zh']}
+                          </h3>
+                        </div>
+                      </div>
+                      <Play className="w-8 h-8 text-cyan-400" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
       <InstructionModal isOpen={showInstruction} onClose={() => setShowInstruction(false)} lang={lang} />
       {showPlatformManual && <PlatformManualModal onClose={() => setShowPlatformManual(false)} t={t} />}
