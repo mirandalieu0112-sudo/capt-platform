@@ -20,7 +20,6 @@ export const levels = [
     },
     listeningQuestions: [
       { pair: ["擦 (cā)", "茶 (chá)"], correct: "擦" },
-      { pair: ["猜 (cāi)", "拆 (chāi)"], correct: "猜" },
       { pair: ["廁 (cè)", "車 (chē)"], correct: "廁" },
       { pair: ["測 (cè)", "徹 (chè)"], correct: "測" },
       { pair: ["次 (cì)", "吃 (chī)"], correct: "次" },
