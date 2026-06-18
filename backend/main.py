@@ -9,40 +9,151 @@ import numpy as np
 import pandas as pd
 import random
 import subprocess
+import zipfile
 from pydantic import BaseModel
-from typing import Optional
-from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks
+from typing import Optional, List, Dict, Any
+from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, Body
 from fastapi.responses import StreamingResponse, FileResponse
+from starlette.background import BackgroundTask
 from fastapi.middleware.cors import CORSMiddleware
 import parselmouth
 
 import database
+import baseline_manager
+from feedback_i18n import FEEDBACK_I18N
+import edge_tts
+import edge_tts.communicate
 
-def calculate_score(cog, target_word):
+original_mkssml = edge_tts.communicate.mkssml
+
+def custom_mkssml(tc, text):
+    if isinstance(text, bytes):
+        text = text.decode("utf-8")
+    escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    
+    escaped = escaped.replace("儲藏", "###CHUCANG###")
+    escaped = escaped.replace("儲存", "###CHUCUN###")
+    escaped = escaped.replace("藏", "<phoneme alphabet='bopomofo' ph='ㄘㄤˊ'>藏</phoneme>")
+    
+    escaped = escaped.replace("###CHUCANG###", "<phoneme alphabet='bopomofo' ph='ㄔㄨˇ ㄘㄤˊ'>儲藏</phoneme>")
+    escaped = escaped.replace("###CHUCUN###", "<phoneme alphabet='bopomofo' ph='ㄔㄨˊ ㄘㄨㄣˊ'>儲存</phoneme>")
+
+    return (
+        "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='zh-TW'>"
+        f"<voice name='{tc.voice}'>"
+        f"<prosody pitch='{tc.pitch}' rate='{tc.rate}' volume='{tc.volume}'>"
+        f"{escaped}"
+        "</prosody>"
+        "</voice>"
+        "</speak>"
+    )
+
+edge_tts.communicate.mkssml = custom_mkssml
+
+def calculate_score(cog, f2, f3, vot_estimate, target_word):
     if cog is None: return None
     target_type = 'ch' if 'ch' in target_word.lower() else 'c'
     cog = float(cog)
+    f3_f2_dist = (f3 - f2) if (f3 is not None and f2 is not None) else None
+    
+    baseline = baseline_manager.get_baseline_for_word(target_word)
+    if not baseline:
+        baseline = baseline_manager.get_fallback_baseline(target_type == 'ch')
+        
     score = 0
-    if target_type == 'c':
-        if cog > 4500: score = 100 - random.uniform(0, 8)
-        elif cog > 3500: score = 92 - random.uniform(0, 10)
-        else: score = 82 - random.uniform(0, 12)
-    else:
-        if 2500 < cog < 5500: score = 100 - random.uniform(0, 8)
-        elif cog > 5500: score = 92 - random.uniform(0, 10)
-        else: score = 82 - random.uniform(0, 12)
+    
+    if target_type == 'c': # 舌尖前音 (c)
+        # c usually has higher COG (6000-9000 Hz)
+        cog_target = baseline.get('cog', 7500)
+        # 評分依據: COG 是否夠高，越接近或高於常模越好
+        if cog >= cog_target * 0.8 or cog >= 6000: 
+            score = random.uniform(90, 100)
+        elif cog >= cog_target * 0.6 or cog >= 4500:
+            score = random.uniform(75, 89)
+        else:
+            score = random.uniform(60, 74)
+    else: # 舌尖後音 (ch)
+        f3_f2_target = baseline.get('f3_f2_diff', 1000)
+        
+        # ch 應該有明顯的 F3 下降，使得 F3-F2 距離縮小
+        if f3_f2_dist is not None:
+            # 如果 F3-F2 距離小於等於常模的 1.2 倍，或是絕對值低於 1200，視為發音良好
+            if f3_f2_dist <= f3_f2_target * 1.2 or f3_f2_dist <= 1200:
+                score = random.uniform(90, 100)
+            elif f3_f2_dist <= f3_f2_target * 1.6 or f3_f2_dist <= 1800:
+                score = random.uniform(75, 89)
+            else:
+                score = random.uniform(60, 74)
+        else:
+            # 容錯處理：如果抓不到 F3，暫時依賴 COG 判斷 (ch 的 COG 較低)
+            cog_target = baseline.get('cog', 4000)
+            if cog <= cog_target * 1.2 or cog <= 5000:
+                score = random.uniform(90, 100)
+            elif cog <= cog_target * 1.5 or cog <= 6000:
+                score = random.uniform(75, 89)
+            else:
+                score = random.uniform(60, 74)
+            
+    # Penalty for missing aspiration (送氣不足)
+    vot_target = baseline.get('vot_estimate', 100)
+    if vot_estimate is not None and (vot_estimate < 30 or vot_estimate < vot_target * 0.4):
+        score -= random.uniform(5, 10)
+        
     return max(0, min(100, round(score)))
 
-def get_feedback(cog, target_word):
-    if cog is None: return "無法分析聲音頻率，請確保麥克風收音清晰且周圍安靜。"
+def get_feedback(cog, f2, f3, duration, intensity_max, vot_estimate, target_word, lang="zh"):
+    t = FEEDBACK_I18N.get(lang, FEEDBACK_I18N["zh"])
+    if cog is None: return t["error"]
+    
     target_type = 'ch' if 'ch' in target_word.lower() else 'c'
     cog = float(cog)
+    f3_f2_dist = (f3 - f2) if (f3 is not None and f2 is not None) else None
+    
+    baseline = baseline_manager.get_baseline_for_word(target_word)
+    if not baseline:
+        baseline = baseline_manager.get_fallback_baseline(target_type == 'ch')
+        
+    feedback_parts = []
+    
     if target_type == 'c':
-        if cog > 3500: return "完美命中「c」的標準頻率區間，舌尖位置很準確。"
-        else: return "聽起來比較像捲舌的 ch。請嘗試把舌尖再往前抵住下門牙背，不要往後捲縮。"
+        cog_target = baseline.get('cog', 7500)
+        if cog >= cog_target * 0.8 or cog >= 6000:
+            feedback_parts.append(t["c_perfect"])
+        elif cog >= cog_target * 0.6 or cog >= 4500:
+            feedback_parts.append(t["c_good"])
+        else:
+            feedback_parts.append(t["c_bad"])
     else:
-        if 2500 < cog < 5500: return "完美命中「ch」的標準頻率區間，捲舌位置恰到好處。"
-        else: return "聽起來比較像平舌的 c。嘗試將舌尖向後捲曲，保留縫隙，發音會更準確喔！"
+        f3_f2_target = baseline.get('f3_f2_diff', 1000)
+        if f3_f2_dist is not None:
+            if f3_f2_dist <= f3_f2_target * 1.2 or f3_f2_dist <= 1200:
+                feedback_parts.append(t["ch_perfect"])
+            elif f3_f2_dist <= f3_f2_target * 1.6 or f3_f2_dist <= 1800:
+                feedback_parts.append(t["ch_good"])
+            else:
+                feedback_parts.append(t["ch_bad"])
+        else:
+            cog_target = baseline.get('cog', 4000)
+            if cog <= cog_target * 1.2 or cog <= 5000:
+                feedback_parts.append(t["ch_perfect"])
+            elif cog <= cog_target * 1.5 or cog <= 6000:
+                feedback_parts.append(t["ch_good"])
+            else:
+                feedback_parts.append(t["ch_bad"])
+            
+    vot_target = baseline.get('vot_estimate', 100)
+    if vot_estimate is not None and (vot_estimate < 30 or vot_estimate < vot_target * 0.4):
+        feedback_parts.append(t["vot"])
+        
+    if duration is not None and duration < 0.2:
+        feedback_parts.append(t["duration"])
+        
+    intensity_target = baseline.get('intensity_max', 80)
+    if intensity_max is not None and (intensity_max < 55 or intensity_max < intensity_target * 0.7):
+        feedback_parts.append(t["intensity"])
+        
+    return " ".join(feedback_parts)
+
 
 app = FastAPI()
 
@@ -62,17 +173,30 @@ def startup_event():
 def read_root():
     return {"status": "ok", "message": "CAPT Backend with Database is running"}
 
-@app.get("/api/tts")
-def get_tts(text: str):
-    url = f"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=zh-TW&q={urllib.parse.quote(text)}"
+@app.get("/api/standard_audio")
+async def get_standard_audio(word: str):
+    # The user requested to use the most standard Taiwanese AI female voice for listening
+    # We will bypass the teacher's recording and use edge-tts (HsiaoChenNeural) directly
+    import re
+    import edge_tts
+    
+    clean_word = re.sub(r'\s*\(.*?\)', '', word).strip()
+    
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'})
-        response = urllib.request.urlopen(req)
-        def iterfile():
-            yield from response
-        return StreamingResponse(iterfile(), media_type="audio/mpeg")
+        communicate = edge_tts.Communicate(clean_word, "zh-TW-HsiaoChenNeural")
+        
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+            temp_path = f.name
+            
+        await communicate.save(temp_path)
+        
+        return FileResponse(temp_path, media_type="audio/mpeg", background=BackgroundTask(os.remove, temp_path))
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+@app.get("/api/tts")
+async def get_tts(text: str):
+    return await get_standard_audio(text)
 
 @app.post("/api/login")
 async def login(
@@ -141,7 +265,8 @@ async def upload_audio(
     audio: UploadFile = File(...),
     user_id: str = Form("unknown"),
     level_id: int = Form(1),
-    target_word: str = Form("unknown")
+    target_word: str = Form("unknown"),
+    lang: str = Form("zh")
 ):
     try:
         # Fetch user info for naming convention
@@ -245,8 +370,8 @@ async def upload_audio(
         except Exception:
             vot_estimate = 0.0
 
-        score = calculate_score(cog, target_word)
-        feedback_text = get_feedback(cog, target_word)
+        score = calculate_score(cog, f2, f3, vot_estimate, target_word)
+        feedback_text = get_feedback(cog, f2, f3, duration, intensity_max, vot_estimate, target_word, lang=lang)
 
         c.execute('''
             INSERT INTO speaking_logs (user_id, level_id, target_word, attempt_number, audio_filename, duration, f0, f1, f2, f3, cog, vot_estimate, intensity_max, created_at, score, feedback_text)
@@ -276,7 +401,7 @@ async def upload_audio(
         return {"status": "error", "message": str(e)}
 
 @app.get("/api/user/{user_id}/history")
-def get_user_history(user_id: str):
+def get_user_history(user_id: str, lang: str = "zh"):
     conn = database.get_db_connection()
     c = conn.cursor()
     try:
@@ -286,7 +411,12 @@ def get_user_history(user_id: str):
         listening = [dict(row) for row in c.fetchall()]
         
         c.execute("SELECT * FROM speaking_logs WHERE user_id = ? AND created_at LIKE ? ORDER BY created_at DESC", (user_id, f"{today}%"))
-        speaking = [dict(row) for row in c.fetchall()]
+        speaking = []
+        for row in c.fetchall():
+            d = dict(row)
+            # Reconstruct localized feedback dynamically
+            d["feedback_text"] = get_feedback(d["cog"], d["f2"], d["f3"], d["duration"], d["intensity_max"], d["vot_estimate"], d["target_word"], lang=lang)
+            speaking.append(d)
         
         return {
             "status": "success",
@@ -340,6 +470,37 @@ def export_data():
         
     return FileResponse(export_path, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', filename='CAPT_Research_Data.xlsx')
 
+class ZipExportRequest(BaseModel):
+    logs: List[Dict[str, Any]]
+
+@app.post("/api/admin/export_audio_zip")
+async def export_audio_zip(req: ZipExportRequest):
+    df = pd.DataFrame(req.logs)
+    
+    filenames = []
+    if 'audio_filename' in df.columns:
+        filenames = df['audio_filename'].dropna().unique().tolist()
+        filenames = [f for f in filenames if f and str(f).strip()]
+        
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+        zip_file.writestr("selected_data.csv", csv_buffer.getvalue())
+        
+        for fname in filenames:
+            file_path = os.path.join(database.AUDIO_DIR, fname)
+            if os.path.exists(file_path):
+                zip_file.write(file_path, arcname=f"audio/{fname}")
+                
+    zip_buffer.seek(0)
+    
+    return StreamingResponse(
+        zip_buffer, 
+        media_type="application/zip", 
+        headers={"Content-Disposition": f"attachment; filename=CAPT_Selected_Audio.zip"}
+    )
+
 class TeacherReview(BaseModel):
     teacher_name: str
     target_word: str
@@ -347,6 +508,7 @@ class TeacherReview(BaseModel):
     audio_filename: str
     is_correct: bool
     confidence_score: int
+    teacher_score: Optional[int] = None
     feedback_duration: Optional[str] = ""
     feedback_volume: Optional[str] = ""
     feedback_comfort: Optional[str] = ""
@@ -357,9 +519,9 @@ async def post_teacher_review(review: TeacherReview):
     conn = database.get_db_connection()
     c = conn.cursor()
     c.execute('''
-        INSERT INTO teacher_reviews (teacher_name, target_word, audio_type, audio_filename, is_correct, confidence_score, feedback_duration, feedback_volume, feedback_comfort, feedback_aspiration, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (review.teacher_name, review.target_word, review.audio_type, review.audio_filename, review.is_correct, review.confidence_score, review.feedback_duration, review.feedback_volume, review.feedback_comfort, review.feedback_aspiration, datetime.now().isoformat()))
+        INSERT INTO teacher_reviews (teacher_name, target_word, audio_type, audio_filename, is_correct, confidence_score, teacher_score, feedback_duration, feedback_volume, feedback_comfort, feedback_aspiration, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (review.teacher_name, review.target_word, review.audio_type, review.audio_filename, review.is_correct, review.confidence_score, review.teacher_score, review.feedback_duration, review.feedback_volume, review.feedback_comfort, review.feedback_aspiration, datetime.now().isoformat()))
     conn.commit()
     conn.close()
     return {"status": "success"}
@@ -377,6 +539,7 @@ def get_all_audio_logs():
             s.created_at, 
             s.user_id, 
             u.name,
+            u.class_name,
             u.nationality, 
             u.birthplace, 
             '口說' as type, 
@@ -386,7 +549,7 @@ def get_all_audio_logs():
             u.gender, 
             s.audio_filename, 
             s.attempt_number,
-            s.f0, s.f1, s.f2, s.f3, s.cog, s.vot_estimate,
+            s.f0, s.f1, s.f2, s.f3, s.cog, s.vot_estimate, s.duration,
             s.score, s.feedback_text
         FROM speaking_logs s
         LEFT JOIN users u ON s.user_id = u.user_id
@@ -401,6 +564,7 @@ def get_all_audio_logs():
             l.created_at, 
             l.user_id, 
             u.name,
+            u.class_name,
             u.nationality, 
             u.birthplace, 
             '聽力' as type, 
@@ -410,7 +574,7 @@ def get_all_audio_logs():
             u.gender, 
             '' as audio_filename, 
             '' as attempt_number,
-            null as f0, null as f1, null as f2, null as f3, null as cog, null as vot_estimate,
+            null as f0, null as f1, null as f2, null as f3, null as cog, null as vot_estimate, null as duration,
             null as score, null as feedback_text
         FROM listening_logs l
         LEFT JOIN users u ON l.user_id = u.user_id
@@ -423,6 +587,33 @@ def get_all_audio_logs():
     all_logs.sort(key=lambda x: x['created_at'], reverse=True)
     
     return {"status": "success", "logs": all_logs}
+
+@app.get("/api/admin/teacher_reviews")
+def get_all_teacher_reviews():
+    conn = database.get_db_connection()
+    c = conn.cursor()
+    c.execute('''
+        SELECT 
+            'review_' || id as id, 
+            id as raw_id,
+            teacher_name,
+            target_word,
+            audio_type,
+            audio_filename,
+            is_correct,
+            confidence_score,
+            teacher_score,
+            feedback_duration,
+            feedback_volume,
+            feedback_comfort,
+            feedback_aspiration,
+            created_at
+        FROM teacher_reviews
+        ORDER BY created_at DESC
+    ''')
+    reviews = [dict(row) for row in c.fetchall()]
+    conn.close()
+    return {"status": "success", "reviews": reviews}
 
 @app.get("/api/audio/{filename}")
 def get_audio_file(filename: str):
@@ -460,12 +651,31 @@ def delete_audio_log(log_id: str):
     return {"status": "error", "message": "Log not found"}
 
 @app.get("/api/forum/posts")
-def get_forum_posts():
+def get_forum_posts(user_id: str = None):
     conn = database.get_db_connection()
     c = conn.cursor()
+    
+    if user_id:
+        c.execute("SELECT * FROM banned_users WHERE user_id = ?", (user_id,))
+        if c.fetchone():
+            conn.close()
+            return {"status": "banned"}
+
     c.execute("SELECT * FROM forum_posts ORDER BY created_at DESC")
     posts = [dict(row) for row in c.fetchall()]
+    
+    c.execute("SELECT * FROM forum_reactions")
+    reactions = [dict(row) for row in c.fetchall()]
     conn.close()
+    
+    from collections import defaultdict
+    reaction_map = defaultdict(list)
+    for r in reactions:
+        reaction_map[r['post_id']].append(r)
+        
+    for post in posts:
+        post['reactions'] = reaction_map[post['id']]
+        
     return {"status": "success", "posts": posts}
 
 @app.post("/api/forum/posts")
@@ -473,14 +683,112 @@ async def create_forum_post(
     user_id: str = Form(...),
     name: str = Form(...),
     role: str = Form(...),
-    content: str = Form(...)
+    content: str = Form(...),
+    media_url: str = Form(None),
+    media_type: str = Form(None)
 ):
     conn = database.get_db_connection()
     c = conn.cursor()
+    
+    c.execute("SELECT * FROM banned_users WHERE user_id = ?", (user_id,))
+    if c.fetchone():
+        conn.close()
+        return {"status": "banned"}
+
+    bad_words = ["fuck", "shit", "bitch", "damn", "cunt", "asshole", 
+                 "幹", "靠", "媽的", "操", "婊子", "傻逼", "屌", 
+                 "đụ", "má", "cặc", "lồn", "chó đẻ", "đĩ"]
+                 
+    content_lower = content.lower()
+    for word in bad_words:
+        if word in content_lower:
+            conn.close()
+            return {"status": "error", "message": "Profanity detected"}
+
     c.execute('''
-        INSERT INTO forum_posts (user_id, name, role, content, created_at)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (user_id, name, role, content, datetime.now().isoformat()))
+        INSERT INTO forum_posts (user_id, name, role, content, media_url, media_type, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (user_id, name, role, content, media_url, media_type, datetime.now().isoformat()))
     conn.commit()
     conn.close()
+    return {"status": "success"}
+
+@app.post("/api/forum/media")
+async def upload_forum_media(file: UploadFile = File(...)):
+    media_dir = os.path.join(database.DATA_DIR, "forum_media")
+    os.makedirs(media_dir, exist_ok=True)
+    
+    import uuid
+    ext = file.filename.split('.')[-1]
+    filename = f"{uuid.uuid4()}.{ext}"
+    file_path = os.path.join(media_dir, filename)
+    
+    with open(file_path, "wb") as buffer:
+        import shutil
+        shutil.copyfileobj(file.file, buffer)
+        
+    return {"status": "success", "url": f"/api/forum/media/{filename}"}
+
+@app.get("/api/forum/media/{filename}")
+def get_forum_media(filename: str):
+    media_dir = os.path.join(database.DATA_DIR, "forum_media")
+    file_path = os.path.join(media_dir, filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    return {"status": "error", "message": "File not found"}
+
+class ReactionRequest(BaseModel):
+    post_id: int
+    user_id: str
+    name: str
+    reaction_type: str
+
+@app.post("/api/forum/reactions")
+def toggle_forum_reaction(req: ReactionRequest):
+    conn = database.get_db_connection()
+    c = conn.cursor()
+    
+    c.execute("SELECT id FROM forum_reactions WHERE post_id=? AND user_id=? AND reaction_type=?", 
+              (req.post_id, req.user_id, req.reaction_type))
+    row = c.fetchone()
+    
+    if row:
+        c.execute("DELETE FROM forum_reactions WHERE id=?", (row['id'],))
+        action = "removed"
+    else:
+        c.execute("INSERT INTO forum_reactions (post_id, user_id, name, reaction_type, created_at) VALUES (?, ?, ?, ?, ?)",
+                  (req.post_id, req.user_id, req.name, req.reaction_type, datetime.now().isoformat()))
+        action = "added"
+        
+    conn.commit()
+    conn.close()
+    
+    return {"status": "success", "action": action}
+
+@app.delete("/api/forum/posts/{post_id}")
+def delete_forum_post(post_id: int):
+    conn = database.get_db_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM forum_posts WHERE id=?", (post_id,))
+    c.execute("DELETE FROM forum_reactions WHERE post_id=?", (post_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+class BanRequest(BaseModel):
+    user_id: str
+    banned_by: str
+
+@app.post("/api/forum/ban")
+def ban_forum_user(req: BanRequest):
+    conn = database.get_db_connection()
+    c = conn.cursor()
+    try:
+        c.execute("INSERT INTO banned_users (user_id, banned_by, created_at) VALUES (?, ?, ?)",
+                  (req.user_id, req.banned_by, datetime.now().isoformat()))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        pass # Already banned
+    finally:
+        conn.close()
     return {"status": "success"}

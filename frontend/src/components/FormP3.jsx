@@ -159,7 +159,7 @@ export default function FormP3({ role, lang, t, onSubmit, onBack }) {
       });
       const result = await response.json();
       if (result.status === "success") {
-        onSubmit({ ...formData, userId: result.user_id });
+        onSubmit({ ...formData, role: role, userId: result.user_id });
       } else {
         alert("Login failed: " + result.message);
       }

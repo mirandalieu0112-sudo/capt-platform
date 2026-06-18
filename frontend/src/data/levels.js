@@ -2,17 +2,18 @@ export const levels = [
   {
     id: 1,
     listeningTitle: {
-      zh: "聽力任務：小籠包真好吃",
-      vi: "Nhiệm vụ nghe: Tiểu long bao thật ngon",
-      en: "Listening Task: Xiaolongbao is delicious"
+      zh: "絕頂小籠包",
+      vi: "Tuyệt Đỉnh Tiểu Long Bao",
+      en: "Supreme Xiaolongbao"
     },
     speakingTitle: {
-      zh: "口說任務：小籠包真好吃",
-      vi: "Nhiệm vụ nói: Tiểu long bao thật ngon",
-      en: "Speaking Task: Xiaolongbao is delicious"
+      zh: "絕頂小籠包",
+      vi: "Tuyệt Đỉnh Tiểu Long Bao",
+      en: "Supreme Xiaolongbao"
     },
     listeningImage: "https://i.postimg.cc/QCVDZDg1/xiao-long-bao.jpg",
     speakingImage: "https://i.postimg.cc/QCVDZDg1/xiao-long-bao.jpg",
+    badgeImage: "/images/badges/xiaolongbao.png",
     description: {
       zh: "輔音 + 單元音對比",
       vi: "Đối chiếu phụ âm + nguyên âm đơn",
@@ -33,17 +34,18 @@ export const levels = [
   {
     id: 2,
     listeningTitle: {
-      zh: "聽力任務：我喜歡喝珍珠奶茶",
-      vi: "Nhiệm vụ nghe: Tôi thích uống trà sữa trân châu",
-      en: "Listening Task: I like drinking boba"
+      zh: "珍奶信徒",
+      vi: "Tín Đồ Trà Sữa",
+      en: "Boba Fanatic"
     },
     speakingTitle: {
-      zh: "口說任務：我喜歡喝珍珠奶茶",
-      vi: "Nhiệm vụ nói: Tôi thích uống trà sữa trân châu",
-      en: "Speaking Task: I like drinking boba"
+      zh: "珍奶信徒",
+      vi: "Tín Đồ Trà Sữa",
+      en: "Boba Fanatic"
     },
     listeningImage: "https://i.postimg.cc/5NCcBns4/zhen-zhu-nai-cha.jpg",
     speakingImage: "https://i.postimg.cc/5NCcBns4/zhen-zhu-nai-cha.jpg",
+    badgeImage: "/images/badges/boba.png",
     description: {
       zh: "輔音 + 雙元音、鼻音韻母對比",
       vi: "Đối chiếu phụ âm + nguyên âm đôi/âm mũi",
@@ -55,7 +57,7 @@ export const levels = [
       { pair: ["猜 (cāi)", "拆 (chāi)"], correct: "猜" },
       { pair: ["餐 (cān)", "產 (chǎn)"], correct: "餐" },
       { pair: ["參 (cān)", "產 (chǎn)"], correct: "參" },
-      { pair: ["藏 (cáng)", "唱 (chàng)"], correct: "藏" },
+
       { pair: ["蒼 (cāng)", "常 (cháng)"], correct: "蒼" },
       { pair: ["草 (cǎo)", "吵 (chǎo)"], correct: "草" },
       { pair: ["操 (cāo)", "超 (chāo)"], correct: "操" },
@@ -71,17 +73,18 @@ export const levels = [
   {
     id: 3,
     listeningTitle: {
-      zh: "聽力任務：我想去平溪放天燈",
-      vi: "Nhiệm vụ nghe: Tôi muốn đi Bình Khê thả đèn trời",
-      en: "Listening Task: I want to release sky lanterns in Pingxi"
+      zh: "天燈心願",
+      vi: "Nguyện Ước Đèn Trời",
+      en: "Sky Lantern Wishes"
     },
     speakingTitle: {
-      zh: "口說任務：我想去平溪放天燈",
-      vi: "Nhiệm vụ nói: Tôi muốn đi Bình Khê thả đèn trời",
-      en: "Speaking Task: I want to release sky lanterns in Pingxi"
+      zh: "天燈心願",
+      vi: "Nguyện Ước Đèn Trời",
+      en: "Sky Lantern Wishes"
     },
     listeningImage: "https://i.postimg.cc/g23WWNRm/tian-deng.jpg",
     speakingImage: "https://i.postimg.cc/g23WWNRm/tian-deng.jpg",
+    badgeImage: "/images/badges/skylantern.png",
     description: {
       zh: "輔音 + 介音 + 韻母對比",
       vi: "Đối chiếu phụ âm + âm đệm + vần",
@@ -102,17 +105,18 @@ export const levels = [
   {
     id: 4,
     listeningTitle: {
-      zh: "聽力任務：陽明山採海芋",
-      vi: "Nhiệm vụ nghe: Hái hoa rum ở núi Dương Minh",
-      en: "Listening Task: Picking Calla Lilies at Yangmingshan"
+      zh: "海芋仙子",
+      vi: "Tiên nữ hoa rum",
+      en: "Calla Lily Fairy"
     },
     speakingTitle: {
-      zh: "口說任務：陽明山採海芋",
-      vi: "Nhiệm vụ nói: Hái hoa rum ở núi Dương Minh",
-      en: "Speaking Task: Picking Calla Lilies at Yangmingshan"
+      zh: "海芋仙子",
+      vi: "Tiên nữ hoa rum",
+      en: "Calla Lily Fairy"
     },
     listeningImage: "https://i.postimg.cc/nLkfsr0v/hai-yu.jpg",
     speakingImage: "https://i.postimg.cc/nLkfsr0v/hai-yu.jpg",
+    badgeImage: "/images/badges/callalily.png",
     description: {
       zh: "混合雙音節 (先平後翹 c + ch)",
       vi: "Âm tiết đôi hỗn hợp (trước thẳng sau cong c + ch)",
@@ -131,17 +135,18 @@ export const levels = [
   {
     id: 5,
     listeningTitle: {
-      zh: "聽力任務：搭台北捷運去玩",
-      vi: "Nhiệm vụ nghe: Đi chơi bằng tàu điện ngầm Đài Bắc",
-      en: "Listening Task: Taking Taipei MRT to have fun"
+      zh: "捷運探險家",
+      vi: "Nhà Thám Hiểm MRT",
+      en: "MRT Explorer"
     },
     speakingTitle: {
-      zh: "口說任務：搭台北捷運去玩",
-      vi: "Nhiệm vụ nói: Đi chơi bằng tàu điện ngầm Đài Bắc",
-      en: "Speaking Task: Taking Taipei MRT to have fun"
+      zh: "捷運探險家",
+      vi: "Nhà Thám Hiểm MRT",
+      en: "MRT Explorer"
     },
     listeningImage: "https://i.postimg.cc/W31L0Vy4/jie-yun.jpg",
     speakingImage: "https://i.postimg.cc/W31L0Vy4/jie-yun.jpg",
+    badgeImage: "/images/badges/mrt.png",
     description: {
       zh: "混合雙音節 (先翹後平 ch + c)",
       vi: "Âm tiết đôi hỗn hợp (trước cong sau thẳng ch + c)",
@@ -157,8 +162,8 @@ export const levels = [
       { word: "出錯 (chū cuò)", type: "ch_c", correct: true },
       { word: "初次 (chū cì)", type: "ch_c", correct: true },
       { word: "船艙 (chuán cāng)", type: "ch_c", correct: true },
-      { word: "儲藏 (chǔ cáng)", type: "ch_c", correct: true },
-      { word: "儲存 (chǔ cún)", type: "ch_c", correct: true },
+
+      { word: "儲存 (chú cún)", type: "ch_c", correct: true },
       { word: "揣測 (chuǎi cè)", type: "ch_c", correct: true },
       { word: "純粹 (chún cuì)", type: "ch_c", correct: true }
     ],

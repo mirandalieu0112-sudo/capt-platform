@@ -68,7 +68,7 @@ const PracticeHistory = ({ userId, lang, onClose }) => {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/user/${userId}/history`);
+        const res = await fetch(`${API_BASE_URL}/api/user/${userId}/history?lang=${lang}`);
         const data = await res.json();
         if (data.status === 'success') {
           setHistory({
@@ -85,7 +85,7 @@ const PracticeHistory = ({ userId, lang, onClose }) => {
     if (userId) {
       fetchHistory();
     }
-  }, [userId]);
+  }, [userId, lang]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -172,11 +172,9 @@ const PracticeHistory = ({ userId, lang, onClose }) => {
                 ) : (
                   <div className="flex flex-col gap-3">
                     {history.speaking.map((log) => {
-                      const isCh = (log.target_word || "").includes('ch');
-                      const targetType = isCh ? 'ch' : 'c';
-                      const score = calculateScore(log.cog || 0, targetType);
+                      const score = log.score !== null ? log.score : 0;
                       const stars = getStars(score);
-                      const feedback = getSandwichFeedback(score, targetType, lang);
+                      const feedbackText = log.feedback_text || t.no_data;
 
                       return (
                         <div key={log.id} className="bg-slate-800/40 border border-slate-700 p-5 rounded-xl flex flex-col gap-4">
@@ -184,7 +182,7 @@ const PracticeHistory = ({ userId, lang, onClose }) => {
                             <div className="flex items-center gap-3">
                               <span className="text-xl font-bold text-cyan-300">{log.target_word}</span>
                               <div className="flex text-yellow-400">
-                                {[...Array(3)].map((_, i) => (
+                                {[...Array(5)].map((_, i) => (
                                   <Star key={i} className={`w-4 h-4 ${i < stars ? 'fill-current' : 'text-slate-600'}`} />
                                 ))}
                               </div>
@@ -205,9 +203,7 @@ const PracticeHistory = ({ userId, lang, onClose }) => {
                             <div className="flex-1 bg-slate-900/50 p-3 rounded-lg border border-slate-700/50 text-sm text-slate-300 leading-relaxed">
                               <p className="text-slate-500 text-[10px] uppercase tracking-wider mb-1">{t.feedback}</p>
                               <div className="flex flex-col gap-1">
-                                <span className="text-cyan-300">{feedback.praise}</span>
-                                <span className="text-slate-200">{feedback.correct}</span>
-                                <span className="text-yellow-300">{feedback.encourage}</span>
+                                <span className="text-slate-200">{feedbackText}</span>
                               </div>
                             </div>
                           </div>

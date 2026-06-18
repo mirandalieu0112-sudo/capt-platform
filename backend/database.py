@@ -77,6 +77,7 @@ def init_db():
             audio_filename TEXT,
             is_correct BOOLEAN,
             confidence_score INTEGER,
+            teacher_score INTEGER,
             feedback_duration TEXT,
             feedback_volume TEXT,
             feedback_comfort TEXT,
@@ -133,9 +134,35 @@ def init_db():
             author_id TEXT,
             content TEXT,
             audio_filename TEXT,
+            media_url TEXT,
+            media_type TEXT,
             is_private BOOLEAN,
             target_user_id TEXT,
             created_at TEXT
+        )
+    ''')
+    
+    # Forum Reactions Table
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS forum_reactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            post_id INTEGER,
+            user_id TEXT,
+            name TEXT,
+            reaction_type TEXT,
+            created_at TEXT,
+            UNIQUE(post_id, user_id, reaction_type)
+        )
+    ''')
+
+    # Banned Users Table
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS banned_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            banned_by TEXT,
+            created_at TEXT,
+            UNIQUE(user_id)
         )
     ''')
 

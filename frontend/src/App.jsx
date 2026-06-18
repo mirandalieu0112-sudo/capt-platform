@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import RecordRTC from 'recordrtc';
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceArea } from 'recharts';
 import { Mic, Square, Loader2, Play, Lock, Star, ChevronLeft, ChevronRight, Volume2, Unlock, Sparkles, Target, Activity, Award, Info, CheckCircle2, Eye, EyeOff, PlayCircle, DownloadCloud, UploadCloud } from 'lucide-react';
+import WaveformDisplay from './components/WaveformDisplay';
 import FormP3 from './components/FormP3';
 import InstructionModal from './components/InstructionModal';
 import PlatformManualModal from './components/PlatformManualModal';
@@ -9,6 +10,8 @@ import AdminDashboard from './components/AdminDashboard';
 import DataReviewTab from './components/DataReviewTab';
 import Forum from './components/Forum';
 import PracticeHistory from './components/PracticeHistory';
+import RewardModal from './components/RewardModal';
+import CollectionBoard from './components/CollectionBoard';
 import { levels } from './data/levels';
 import { calculateScore, getStars, getSandwichFeedback } from './utils/scoring';
 import { audioBufferToWav } from './utils/audioBufferToWav';
@@ -23,7 +26,8 @@ const i18n = {
     title: "中文發音練習：舌尖前音與舌尖後音 (c/ch)",
     basic_info: "基本資料填寫",
     map_title: "語音特訓艙闖關地圖",
-    map_subtitle: "完成 60 分即可解鎖下一關",
+    map_subtitle: "一半以上的題目達到 80 分即可獲得專屬貼紙",
+    collection_btn: "📖 收集冊",
     learner: "Learner",
     back_to_map: "返回地圖",
     back_to_prev: "返回前頁",
@@ -72,7 +76,8 @@ const i18n = {
     title: "Luyện phát âm: Âm đầu lưỡi trước và sau (c/ch)",
     basic_info: "Điền thông tin cơ bản",
     map_title: "Bản đồ thử thách VR",
-    map_subtitle: "Đạt 60 điểm để mở khóa cửa tiếp theo",
+    map_subtitle: "Đạt 1/2 số câu trên 80 điểm để nhận được phần thưởng nhỏ.",
+    collection_btn: "📖 Bộ sưu tập",
     learner: "Học viên",
     back_to_map: "Quay lại bản đồ",
     back_to_prev: "Quay lại trang trước",
@@ -121,7 +126,8 @@ const i18n = {
     title: "Pronunciation Practice: Apical Consonants (c/ch)",
     basic_info: "Basic Information",
     map_title: "VR Challenge Map",
-    map_subtitle: "Score 60 points to unlock the next level",
+    map_subtitle: "Score 80+ on half of the questions to get a sticker",
+    collection_btn: "📖 Collection Board",
     learner: "Learner",
     back_to_map: "Back to Map",
     back_to_prev: "Go Back",
@@ -172,6 +178,8 @@ function App() {
   
   // Game State
   const [unlockedLevels, setUnlockedLevels] = useState([1]); // Array of unlocked level IDs
+  const [levelListeningPerfect, setLevelListeningPerfect] = useState({});
+  const [speakingScores, setSpeakingScores] = useState({});
   const [currentLevel, setCurrentLevel] = useState(null);
   const [showInstruction, setShowInstruction] = useState(false);
   const [showPlatformManual, setShowPlatformManual] = useState(false);
@@ -179,6 +187,9 @@ function App() {
   const [activeWord, setActiveWord] = useState('');
   const [seenInstructionLevels, setSeenInstructionLevels] = useState([]);
   const [completedListeningLevels, setCompletedListeningLevels] = useState([]);
+  const [collectedBadges, setCollectedBadges] = useState([]);
+  const [showReward, setShowReward] = useState(null);
+  const [showCollection, setShowCollection] = useState(false);
 
   // Listening Quiz State
   const [listenIdx, setListenIdx] = useState(0);
@@ -207,6 +218,7 @@ function App() {
   const streamRef = useRef(null);
   const fileInputRef = useRef(null);
   const utteranceRef = useRef(null); // Ref to prevent Chrome TTS garbage collection
+  const currentAudioRef = useRef(null); // Ref to prevent audio overlapping
 
   const t = i18n[lang] || i18n['zh'];
 
@@ -225,8 +237,23 @@ function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [adminError, setAdminError] = useState('');
 
+  const handleQuickTest = (roleType) => {
+    setRole(roleType);
+    setUserData({
+      name: "阮欣妤",
+      userId: "阮欣妤",
+      nationality: "vn",
+      birthplace: "北越",
+      chineseLevel: "高",
+      nativeLanguage: "vn",
+      gender: "F",
+      role: roleType,
+    });
+    setStep(3);
+  };
+
   const handleLevelSelect = (levelId) => {
-    if (!unlockedLevels.includes(levelId)) return;
+    if (userData?.role !== 'teacher' && !unlockedLevels.includes(levelId)) return;
     const lvl = levels.find(l => l.id === levelId);
     setCurrentLevel(lvl);
     
@@ -240,7 +267,7 @@ function App() {
     setListenIdx(0);
     setListenStatus('idle');
     setListenScore(0);
-    setMode('listening'); // FORCE LISTENING FIRST
+    setMode(userData?.role === 'teacher' ? 'speaking' : 'listening'); 
     setShowInstruction(false); // DO NOT SHOW INSTRUCTION YET
     setStep(4);
   };
@@ -258,15 +285,70 @@ function App() {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.getVoices();
     }
+    
+    try {
+      const savedBadges = localStorage.getItem('capt_collectedBadges');
+      if (savedBadges) setCollectedBadges(JSON.parse(savedBadges));
+      
+      const savedUnlocked = localStorage.getItem('capt_unlockedLevels');
+      if (savedUnlocked) setUnlockedLevels(JSON.parse(savedUnlocked));
+      
+      const savedListening = localStorage.getItem('capt_levelListeningPerfect');
+      if (savedListening) setLevelListeningPerfect(JSON.parse(savedListening));
+      
+      const savedSpeaking = localStorage.getItem('capt_speakingScores');
+      if (savedSpeaking) setSpeakingScores(JSON.parse(savedSpeaking));
+    } catch (e) { console.error('Error loading game state', e); }
   }, []);
 
+  useEffect(() => {
+    localStorage.setItem('capt_unlockedLevels', JSON.stringify(unlockedLevels));
+  }, [unlockedLevels]);
+
+  useEffect(() => {
+    localStorage.setItem('capt_levelListeningPerfect', JSON.stringify(levelListeningPerfect));
+  }, [levelListeningPerfect]);
+
+  useEffect(() => {
+    localStorage.setItem('capt_speakingScores', JSON.stringify(speakingScores));
+  }, [speakingScores]);
+
+  const unlockBadge = (level) => {
+    setCollectedBadges(prev => {
+      if (!prev.includes(level.id)) {
+        const newBadges = [...prev, level.id];
+        localStorage.setItem('capt_collectedBadges', JSON.stringify(newBadges));
+        setShowReward(level);
+        return newBadges;
+      }
+      return prev;
+    });
+  };
+
+  // Check listening score when listening is finished
+  useEffect(() => {
+    if (mode === 'listening' && currentLevel && currentLevel.listeningQuestions) {
+      if (listenIdx === currentLevel.listeningQuestions.length) {
+        const percentage = listenScore / currentLevel.listeningQuestions.length;
+        if (percentage >= 0.8) {
+          unlockBadge(currentLevel);
+        }
+      }
+    }
+  }, [listenIdx, mode, currentLevel, listenScore]);
+
   const playTTS = (text) => {
-    const cleanText = text.replace(/\s*\(.*?\)/g, '').trim(); 
+    // 優先向後台索取「老師標準錄音檔」，如果沒有才會 fallback 到 TTS
+    const url = `${API_BASE_URL}/api/standard_audio?word=${encodeURIComponent(text)}&t=${Date.now()}`;
     
-    // 🔥 終極殺手鐧：透過我們自己的 Python 後台當作跳板 (Proxy)
-    // 這樣 Google Chrome 就不會發現是網頁在偷抓音檔，完全避開 403 Forbidden 的安全封鎖！
-    const url = `${API_BASE_URL}/api/tts?text=${encodeURIComponent(cleanText)}`;
+    // Stop previous audio if it's still playing
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current.currentTime = 0;
+    }
+    
     const audio = new Audio(url);
+    currentAudioRef.current = audio;
     
     audio.play().catch(err => {
       console.warn("後台 Proxy 語音播放失敗，使用本地備用語音", err);
@@ -354,6 +436,7 @@ function App() {
       formData.append("user_id", userData?.userId || 'unknown');
       formData.append("level_id", currentLevel.id);
       formData.append("target_word", activeWord);
+      formData.append("lang", lang);
       
       const currentCount = recordCounts[activeWord] || 0;
       formData.append("attempt_number", `${currentCount + 1}_3`);
@@ -368,17 +451,34 @@ function App() {
         const score = data.score !== null ? data.score : 0;
         const targetType = activeWord.toLowerCase().includes('ch') ? 'ch' : 'c';
         const stars = getStars(score);
-        const feedback = getSandwichFeedback(score, targetType, lang);
         
         data.score = score;
         data.stars = stars;
-        data.feedback = feedback;
+        data.feedback_text = data.feedback || data.feedback_text; // Normalize field name
 
-        if (score >= 60 && currentLevel) {
-          if (!unlockedLevels.includes(currentLevel.id + 1) && currentLevel.id < 5) {
-              setUnlockedLevels(prev => [...prev, currentLevel.id + 1]);
+        setSpeakingScores(prev => {
+          const newScores = { ...prev, [activeWord]: Math.max(score, prev[activeWord] || 0) };
+          if (currentLevel) {
+            const allLevelWords = Array.from(new Set(currentLevel.listeningQuestions.flatMap(q => q.pair ? q.pair : [q.word])));
+            const completedWords = allLevelWords.filter(w => newScores[w] !== undefined);
+            
+            if (completedWords.length === allLevelWords.length) {
+              setUnlockedLevels(uPrev => {
+                if (!uPrev.includes(currentLevel.id + 1) && currentLevel.id < levels.length) {
+                  return [...uPrev, currentLevel.id + 1];
+                }
+                return uPrev;
+              });
+              
+              const totalScore = allLevelWords.reduce((sum, w) => sum + newScores[w], 0);
+              const avgScore = totalScore / allLevelWords.length;
+              if (avgScore >= 80 || levelListeningPerfect[currentLevel.id]) {
+                unlockBadge(currentLevel);
+              }
+            }
           }
-        }
+          return newScores;
+        });
 
         setResult(data);
         setStatus('record_status_complete');
@@ -473,7 +573,15 @@ function App() {
             <ChevronLeft className="w-4 h-4" /> {t.back_to_prev}
           </button>
           <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">{t.map_title}</h2>
-          <p className="text-slate-400 mt-2">{t.map_subtitle}</p>
+          <div className="flex items-center gap-4 mt-2">
+            <p className="text-slate-400">{t.map_subtitle}</p>
+            <button 
+              onClick={() => setShowCollection(true)}
+              className="px-3 py-1.5 bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/40 border border-yellow-500/50 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors"
+            >
+              {t.collection_btn} ({collectedBadges.length}/{levels.length})
+            </button>
+          </div>
         </div>
         <div className="text-right">
           <p className="text-sm text-slate-500">{t.learner}</p>
@@ -483,7 +591,7 @@ function App() {
 
       <div className="grid gap-4">
         {levels.map(lvl => {
-          const isUnlocked = unlockedLevels.includes(lvl.id);
+          const isUnlocked = userData?.role === 'teacher' || unlockedLevels.includes(lvl.id);
           return (
             <div 
               key={lvl.id}
@@ -590,7 +698,11 @@ function App() {
                   <div className="text-slate-400 mb-6 font-mono text-lg">Question {listenIdx + 1} / {currentLevel.listeningQuestions.length}</div>
                   
                   <button 
-                    onClick={() => playTTS(currentLevel.listeningQuestions[listenIdx].correct)} 
+                    onClick={() => {
+                      const q = currentLevel.listeningQuestions[listenIdx];
+                      const fullWord = q.pair.find(p => p.startsWith(q.correct));
+                      playTTS(fullWord || q.correct);
+                    }} 
                     className="p-8 bg-cyan-500/20 hover:bg-cyan-500/40 border border-cyan-500/50 rounded-full text-cyan-400 transition-all transform hover:scale-110 mb-10 shadow-[0_0_30px_rgba(6,182,212,0.3)]"
                   >
                     <Volume2 className="w-12 h-12" />
@@ -674,6 +786,9 @@ function App() {
                     <button 
                       onClick={() => {
                         setCompletedListeningLevels(prev => [...new Set([...prev, currentLevel.id])]);
+                        if (listenScore === currentLevel.listeningQuestions.length) {
+                          setLevelListeningPerfect(prev => ({...prev, [currentLevel.id]: true}));
+                        }
                         switchToSpeaking();
                       }}
                       className="px-6 py-3 bg-cyan-600 hover:bg-cyan-500 rounded-xl font-bold text-white transition-colors flex items-center gap-2"
@@ -700,6 +815,7 @@ function App() {
                    <button 
                      onClick={() => {
                        setCompletedListeningLevels(prev => [...new Set([...prev, currentLevel.id])]);
+                       setLevelListeningPerfect(prev => ({...prev, [currentLevel.id]: true}));
                        switchToSpeaking();
                      }}
                      className="px-8 py-4 bg-cyan-600 hover:bg-cyan-500 rounded-xl font-bold text-white transition-colors flex items-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.3)]"
@@ -710,9 +826,8 @@ function App() {
               </div>
             )}
             
-            <p className="text-slate-500 mt-12 text-sm">{t.tts_note}</p>
+            {/* Standard audio integration note removed */}
           </div>
-          )
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="flex flex-col gap-6">
@@ -726,7 +841,12 @@ function App() {
                       return (
                         <button 
                           key={idx}
-                          onClick={() => setActiveWord(word)}
+                          onClick={() => {
+                            setActiveWord(word);
+                            setResult(null);
+                            setAudioUrl(null);
+                            setStatus('idle');
+                          }}
                           className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all ${
                             activeWord === word 
                               ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.2)]' 
@@ -760,7 +880,31 @@ function App() {
                         已錄製: {recordCounts[activeWord] || 0} / 3 次
                       </div>
                     )}
-                    <div className="text-6xl mb-8">{isRecording ? '🔥' : '🗣️'}</div>
+                    {activeWord ? (
+                      <div className="mb-8 flex flex-col items-center animate-in fade-in zoom-in duration-500">
+                        <video 
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                          src={
+                            activeWord.toLowerCase().includes('ch') || 
+                            activeWord.toLowerCase().includes('zh') || 
+                            activeWord.toLowerCase().includes('sh') || 
+                            activeWord.toLowerCase().includes('r') 
+                              ? '/tongue-ch.mp4' 
+                              : '/tongue-c.mp4'
+                          } 
+                          className="w-48 h-48 md:w-56 md:h-56 object-cover rounded-2xl border border-slate-700/50 bg-slate-800/80 shadow-lg"
+                        />
+                        <p className="mt-3 text-sm text-cyan-300/70 font-semibold tracking-wider">發音舌位引導</p>
+                        <a href="https://www.bilibili.com/video/BV1Dt411R7iQ" target="_blank" rel="noopener noreferrer" className="mt-1 text-[10px] text-slate-500 hover:text-slate-400 transition-colors">
+                          資料來源：Bilibili (普通话 汉语拼音 声韵调 动程图)
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="text-6xl mb-8">{isRecording ? '🔥' : '🗣️'}</div>
+                    )}
                     <button 
                         onClick={isRecording ? stopRecording : startRecording}
                         className={`relative flex items-center gap-3 px-10 py-5 rounded-full font-bold text-xl transition-all overflow-hidden group ${
@@ -793,6 +937,11 @@ function App() {
                           >
                             <DownloadCloud className="w-4 h-4" /> {t.btn_download}
                           </a>
+                          
+                          {/* Waveform Visualization */}
+                          <div className="w-full mt-4 mb-2">
+                            <WaveformDisplay audioUrl={audioUrl} />
+                          </div>
                         </>
                       )}
                       
@@ -817,21 +966,17 @@ function App() {
 
                 {result && result.acoustic_features && (
                     <div className="bg-slate-800/40 backdrop-blur-md border border-slate-700 rounded-3xl p-6">
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
                           <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
-                              <p className="text-slate-500 text-xs mb-1 uppercase font-semibold tracking-wider">F1 Formant</p>
-                              <p className="text-2xl font-mono text-emerald-400">{Math.round(result.acoustic_features.F1)} <span className="text-sm text-slate-500">Hz</span></p>
+                              <p className="text-slate-500 text-xs mb-1 uppercase font-semibold tracking-wider">VOT (嗓音起始)</p>
+                              <p className="text-2xl font-mono text-emerald-400">{result.acoustic_features.VOT_estimate_ms ? result.acoustic_features.VOT_estimate_ms.toFixed(1) : '--'} <span className="text-sm text-slate-500">ms</span></p>
                           </div>
                           <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
-                              <p className="text-slate-500 text-xs mb-1 uppercase font-semibold tracking-wider">F2 Formant</p>
-                              <p className="text-2xl font-mono text-emerald-400">{Math.round(result.acoustic_features.F2)} <span className="text-sm text-slate-500">Hz</span></p>
-                          </div>
-                          <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
-                              <p className="text-slate-500 text-xs mb-1 uppercase font-semibold tracking-wider">Center of Gravity</p>
+                              <p className="text-slate-500 text-xs mb-1 uppercase font-semibold tracking-wider">COG (頻譜重心)</p>
                               <p className="text-2xl font-mono text-purple-400">{Math.round(result.acoustic_features.COG)} <span className="text-sm text-slate-500">Hz</span></p>
                           </div>
                           <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
-                              <p className="text-slate-500 text-xs mb-1 uppercase font-semibold tracking-wider">Duration</p>
+                              <p className="text-slate-500 text-xs mb-1 uppercase font-semibold tracking-wider">Duration (音長)</p>
                               <p className="text-2xl font-mono text-yellow-400">{result.acoustic_features.duration ? result.acoustic_features.duration.toFixed(2) : '0.00'} <span className="text-sm text-slate-500">s</span></p>
                           </div>
                         </div>
@@ -842,7 +987,8 @@ function App() {
             {result ? (
                 <div className="flex flex-col gap-6 animate-in slide-in-from-right-8 duration-700">
                     
-                    {/* Scatter Chart */}
+                    {/* Scatter Chart - Hidden per user request */}
+                    {false && (
                     <div className="bg-slate-800/40 backdrop-blur-md border border-slate-700 rounded-3xl p-6">
                       <h3 className="text-lg font-bold text-cyan-300 mb-4">{t.analysis_chart} (F1/F2 Space)</h3>
                       <div className="h-64 w-full">
@@ -866,9 +1012,10 @@ function App() {
                         <span className="flex items-center gap-1 text-amber-400"><Star className="w-3 h-3 fill-amber-400 text-amber-400" /> {t.zone_you}</span>
                       </div>
                     </div>
+                    )}
 
                     {/* Star Rating & Sandwich Feedback */}
-                    {result.feedback && (
+                    {result.feedback_text && (
                         <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 backdrop-blur-xl border border-purple-500/30 rounded-3xl p-6 shadow-xl relative overflow-hidden">
                             <div className="flex items-center justify-between mb-6 border-b border-white/10 pb-6">
                               <div>
@@ -910,20 +1057,12 @@ function App() {
                     ) : null}
 
                             <div className="flex flex-col gap-4 relative z-10">
-                                {/* Sandwich Feedback */}
-                                <div className="flex gap-4 items-start bg-emerald-500/10 p-4 rounded-2xl border border-emerald-500/20">
-                                    <div className="text-2xl">👍</div>
-                                    <p className="text-emerald-300 font-medium">{result.feedback.praise}</p>
-                                </div>
-                                
                                 <div className="flex gap-4 items-start bg-amber-500/10 p-4 rounded-2xl border border-amber-500/20">
-                                    <div className="text-2xl">💡</div>
-                                    <p className="text-amber-300 font-medium leading-relaxed">{result.feedback.correct}</p>
-                                </div>
-
-                                <div className="flex gap-4 items-start bg-blue-500/10 p-4 rounded-2xl border border-blue-500/20">
-                                    <div className="text-2xl"><Award className="w-6 h-6 text-blue-400" /></div>
-                                    <p className="text-blue-300 font-medium">{result.feedback.encourage}</p>
+                                    <div className="text-2xl">🤖</div>
+                                    <div className="flex-1">
+                                        <p className="text-xs text-amber-500/70 mb-1 uppercase tracking-wider font-bold">Phản hồi AI / AI 回饋</p>
+                                        <p className="text-amber-300 font-medium leading-relaxed">{result.feedback_text}</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -964,7 +1103,7 @@ function App() {
   };
 
   if (step === 999) {
-    return <AdminDashboard onBack={() => setStep(1)} adminName={userData?.name || "Teacher"} />;
+    return <AdminDashboard onBack={() => setStep(1)} adminName={userData?.name || "Teacher"} onQuickTest={handleQuickTest} />;
   }
 
   return (
@@ -1047,7 +1186,7 @@ function App() {
           </div>
         )}
           {step === 4 && renderPracticeArea()}
-          {step === 5 && <AdminDashboard />}
+          {step === 5 && <AdminDashboard onQuickTest={handleQuickTest} />}
           {step === 6 && (
             <div className="w-full max-w-5xl animate-in fade-in duration-500">
               <button onClick={() => setStep(3)} className="flex items-center gap-2 text-slate-400 hover:text-cyan-400 transition-colors mb-6">
@@ -1079,7 +1218,12 @@ function App() {
                     onClick={() => {
                       setCurrentLevel(lvl);
                       setMode('speaking');
-                      setActiveWord(lvl.speakingWords[0]);
+                      
+                      // Extract the first word from listeningQuestions (since speakingWords is undefined)
+                      const firstQ = lvl.listeningQuestions[0];
+                      const firstWord = firstQ.pair ? firstQ.pair[0] : firstQ.word;
+                      setActiveWord(firstWord);
+                      
                       setStatus('idle');
                       setStep(4);
                     }}
@@ -1185,6 +1329,9 @@ function App() {
           onClose={() => setShowHistory(false)} 
         />
       )}
+      {/* Gamification Modals */}
+      {showReward && <RewardModal level={showReward} onClose={() => setShowReward(null)} lang={lang} />}
+      {showCollection && <CollectionBoard collectedBadges={collectedBadges} onClose={() => setShowCollection(false)} lang={lang} />}
     </div>
   );
 }
